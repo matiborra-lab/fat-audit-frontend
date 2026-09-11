@@ -6,7 +6,7 @@ import { AuthCard, Campo, Boton } from '../components/ui';
 export default function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
-  const [email, setEmail] = useState('');
+  const [identificador, setIdentificador] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [cargando, setCargando] = useState(false);
@@ -16,7 +16,7 @@ export default function Login() {
     setError('');
     setCargando(true);
     try {
-      await login(email, password);
+      await login(identificador, password);
       navigate('/');
     } catch (err) {
       setError(err.message);
@@ -28,7 +28,7 @@ export default function Login() {
   return (
     <AuthCard titulo="FAT Audit" subtitulo="Auditorías de sucursales FAT Burger">
       <form onSubmit={onSubmit} className="space-y-4">
-        <Campo label="Email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoFocus />
+        <Campo label="Usuario o email" type="text" required value={identificador} onChange={(e) => setIdentificador(e.target.value)} autoFocus />
         <Campo label="Contraseña" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
         {error && <p className="text-sm text-fat-bordo-600">{error}</p>}
         <Boton type="submit" cargando={cargando}>Ingresar</Boton>

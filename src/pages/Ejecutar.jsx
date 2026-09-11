@@ -2,7 +2,75 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
-import { Tarjeta, Campo, Select, Boton, Cargando } from '../components/ui';
+import { Tarjeta, Select, Boton, Cargando } from '../components/ui';
+
+const ROL_LABEL = { ADMIN: 'Admin', AUDITOR: 'Auditor', GERENTE: 'Gerente', COLABORADOR: 'Colaborador' };
+
+// Buscador de responsables PRESENTES en la auditoría (puede ser mas de
+// uno) - se arma la lista de nombres a partir de la gente de la sucursal,
+// en vez de un campo de texto libre. Se sigue guardando como
+// responsable_nombre (texto), uniendo los nombres elegidos con ", ".
+function BuscadorResponsablesPresentes({ sucursalId, seleccionados, onChange }) {
+  const [texto, setTexto] = useState('');
+  const [opciones, setOpciones] = useState([]);
+  const [abierto, setAbierto] = useState(false);
+
+  useEffect(() => {
+    if (!sucursalId) { setOpciones([]); return; }
+    const id = setTimeout(() => {
+      const params = new URLSearchParams({ sucursal_id: sucursalId });
+      if (texto) params.set('q', texto);
+      api.get(`/api/usuarios/buscar?${params}`).then(setOpciones).catch(() => setOpciones([]));
+    }, 250);
+    return () => clearTimeout(id);
+  }, [texto, sucursalId]);
+
+  function agregar(u) {
+    if (!seleccionados.some((s) => s.id === u.id)) onChange([...seleccionados, u]);
+    setTexto('');
+    setAbierto(false);
+  }
+  function quitar(id) {
+    onChange(seleccionados.filter((s) => s.id !== id));
+  }
+
+  const opcionesFiltradas = opciones.filter((o) => !seleccionados.some((s) => s.id === o.id));
+
+  return (
+    <div className="relative">
+      <label className="block text-sm font-medium text-gray-700 mb-1">Responsables presentes (opcional)</label>
+      {seleccionados.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-1.5">
+          {seleccionados.map((s) => (
+            <span key={s.id} className="inline-flex items-center gap-1 bg-fat-bordo-50 text-fat-bordo-700 text-xs font-medium pl-2 pr-1 py-1 rounded-full">
+              {s.nombre || s.email}
+              <button type="button" onClick={() => quitar(s.id)} className="hover:bg-fat-bordo-100 rounded-full w-4 h-4 leading-none">&times;</button>
+            </span>
+          ))}
+        </div>
+      )}
+      <input
+        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-fat-bordo-400"
+        placeholder={sucursalId ? 'Buscar por nombre o email…' : 'Elegí primero una sucursal'}
+        disabled={!sucursalId}
+        value={texto}
+        onChange={(e) => { setTexto(e.target.value); setAbierto(true); }}
+        onFocus={() => setAbierto(true)}
+        onBlur={() => setTimeout(() => setAbierto(false), 150)}
+      />
+      {abierto && opcionesFiltradas.length > 0 && (
+        <div className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto">
+          {opcionesFiltradas.map((u) => (
+            <button key={u.id} type="button" onMouseDown={() => agregar(u)} className="w-full text-left px-3 py-2 hover:bg-gray-50 text-sm">
+              <span className="font-medium text-gray-900">{u.nombre || u.email}</span>
+              <span className="text-xs text-gray-400 ml-1.5">{ROL_LABEL[u.rol]}{u.puesto ? ` · ${u.puesto}` : ''}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function Ejecutar() {
   const { usuario } = useAuth();
@@ -12,7 +80,7 @@ export default function Ejecutar() {
   const [plantillas, setPlantillas] = useState(null);
   const [templateId, setTemplateId] = useState('');
   const [tipo, setTipo] = useState('INTERNA');
-  const [responsable, setResponsable] = useState('');
+  const [responsables, setResponsables] = useState([]);
   const [error, setError] = useState('');
   const [iniciando, setIniciando] = useState(false);
 
@@ -32,7 +100,8 @@ export default function Ejecutar() {
     setError('');
     setIniciando(true);
     try {
-      const run = await api.post('/api/runs', { template_id: Number(templateId), sucursal_id: Number(sucursalId), tipo, responsable_nombre: responsable });
+      const responsable_nombre = responsables.map((r) => r.nombre || r.email).join(', ');
+      const run = await api.post('/api/runs', { template_id: Number(templateId), sucursal_id: Number(sucursalId), tipo, responsable_nombre });
       navigate(`/ejecucion/${run.id}`);
     } catch (err) {
       setError(err.message);
@@ -66,7 +135,7 @@ export default function Ejecutar() {
             <option value="MARCA">De marca</option>
           </Select>
 
-          <Campo label="Responsable / turno auditado (opcional)" value={responsable} onChange={(e) => setResponsable(e.target.value)} />
+          <BuscadorResponsablesPresentes sucursalId={sucursalId} seleccionados={responsables} onChange={setResponsables} />
 
           {error && <p className="text-sm text-fat-bordo-600">{error}</p>}
           <Boton type="submit" disabled={!templateId} cargando={iniciando}>Comenzar auditoría</Boton>

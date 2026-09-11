@@ -1,0 +1,438 @@
+import { useEffect, useMemo, useState } from 'react';
+import { api } from '../api/client';
+import { useAuth } from '../context/AuthContext';
+import { Tarjeta, Campo, Select, Boton, Toast, Cargando } from '../components/ui';
+import BuscadorResponsable from '../components/BuscadorResponsable';
+
+const PUESTOS = ['COCINA', 'CAJA', 'REFUERZO_COCINA'];
+const PUESTO_LABEL = { COCINA: 'Cocina', CAJA: 'Caja', REFUERZO_COCINA: 'Refuerzo cocina' };
+const TURNO_LABEL = { DIURNO: 'Diurno', NOCTURNO: 'Nocturno' };
+// Lun..Dom en la UI -> Date#getDay() (0=domingo..6=sábado), que es lo que espera el backend.
+const DIAS_SEMANA_UI = [
+  { label: 'Lun', valor: 1 }, { label: 'Mar', valor: 2 }, { label: 'Mié', valor: 3 },
+  { label: 'Jue', valor: 4 }, { label: 'Vie', valor: 5 }, { label: 'Sáb', valor: 6 }, { label: 'Dom', valor: 0 },
+];
+
+function aClaveDia(d) {
+  return d.toISOString().slice(0, 10);
+}
+function hoyISO() {
+  return aClaveDia(new Date());
+}
+function lunesDeSemana(d) {
+  const dia = d.getDay();
+  const delta = dia === 0 ? -6 : 1 - dia;
+  const l = new Date(d);
+  l.setDate(l.getDate() + delta);
+  return l;
+}
+function generarSemana(lunes) {
+  return Array.from({ length: 7 }, (_, i) => new Date(lunes.getFullYear(), lunes.getMonth(), lunes.getDate() + i));
+}
+function generarGrillaMes(anio, mes) {
+  const primero = new Date(anio, mes, 1);
+  const diaSemana = (primero.getDay() + 6) % 7;
+  const inicio = new Date(anio, mes, 1 - diaSemana);
+  return Array.from({ length: 42 }, (_, i) => new Date(inicio.getFullYear(), inicio.getMonth(), inicio.getDate() + i));
+}
+
+export default function GestionarTurnos() {
+  const { usuario } = useAuth();
+  const [sucursales, setSucursales] = useState([]);
+  const [sucursalId, setSucursalId] = useState(usuario.rol === 'GERENTE' ? usuario.sucursal_id : '');
+  const [sucursal, setSucursal] = useState(null);
+  const [horarioForm, setHorarioForm] = useState(null);
+  const [guardandoHorario, setGuardandoHorario] = useState(false);
+
+  const [vista, setVista] = useState('SEMANA'); // SEMANA | MES
+  const [ancla, setAncla] = useState(new Date());
+
+  const [toast, setToast] = useState('');
+  const [error, setError] = useState('');
+  const [solicitudes, setSolicitudes] = useState(null);
+  const [turnos, setTurnos] = useState(null);
+
+  const [celdaAbierta, setCeldaAbierta] = useState(null); // { fecha, turnoTipo }
+  const [formAlta, setFormAlta] = useState({ responsable: null, puesto: '' });
+  const [guardandoAlta, setGuardandoAlta] = useState(false);
+
+  const [formProgramar, setFormProgramar] = useState({
+    responsable: null, puesto: '', turnoTipo: 'DIURNO', diasSemana: [], fechaDesde: hoyISO(), fechaHasta: '', notificar: true,
+  });
+  const [guardandoProgramar, setGuardandoProgramar] = useState(false);
+
+  const semana = useMemo(() => generarSemana(lunesDeSemana(ancla)), [ancla]);
+  const grillaMes = useMemo(() => generarGrillaMes(ancla.getFullYear(), ancla.getMonth()), [ancla]);
+  const diasVisibles = vista === 'SEMANA' ? semana : grillaMes;
+
+  useEffect(() => {
+    if (usuario.rol === 'ADMIN') api.get('/api/sucursales').then(setSucursales);
+  }, [usuario.rol]);
+
+  useEffect(() => {
+    if (!sucursalId) { setSucursal(null); return; }
+    api.get('/api/sucursales').then((lista) => {
+      const s = lista.find((x) => x.id === Number(sucursalId));
+      setSucursal(s || null);
+      if (s) setHorarioForm({
+        turno_diurno_desde: s.turno_diurno_desde.slice(0, 5), turno_diurno_hasta: s.turno_diurno_hasta.slice(0, 5),
+        turno_nocturno_desde: s.turno_nocturno_desde.slice(0, 5), turno_nocturno_hasta: s.turno_nocturno_hasta.slice(0, 5),
+      });
+    });
+  }, [sucursalId]);
+
+  function recargar() {
+    if (!sucursalId) return;
+    api.get('/api/calendario/solicitudes').then(setSolicitudes).catch(() => setSolicitudes([]));
+    const desde = aClaveDia(diasVisibles[0]);
+    const hasta = aClaveDia(diasVisibles[diasVisibles.length - 1]);
+    api.get(`/api/calendario?sucursal_id=${sucursalId}&tipo=TURNO&desde=${desde}&hasta=${hasta}`).then(setTurnos).catch(() => setTurnos([]));
+  }
+  useEffect(recargar, [sucursalId, vista, ancla.getMonth(), ancla.getFullYear(), ancla.getDate()]);
+
+  const turnosPorDia = useMemo(() => {
+    // clave = 'YYYY-MM-DD|DIURNO|COCINA'
+    const mapa = new Map();
+    for (const t of turnos || []) {
+      const clave = `${t.fecha_hora.slice(0, 10)}|${t.turno_tipo}|${t.puesto}`;
+      if (!mapa.has(clave)) mapa.set(clave, []);
+      mapa.get(clave).push(t);
+    }
+    return mapa;
+  }, [turnos]);
+
+  const totalesPorDia = useMemo(() => {
+    const mapa = new Map();
+    for (const t of turnos || []) {
+      const dia = t.fecha_hora.slice(0, 10);
+      if (!mapa.has(dia)) mapa.set(dia, { DIURNO: 0, NOCTURNO: 0 });
+      mapa.get(dia)[t.turno_tipo]++;
+    }
+    return mapa;
+  }, [turnos]);
+
+  async function guardarHorario(e) {
+    e.preventDefault();
+    setGuardandoHorario(true);
+    setError('');
+    try {
+      const actualizada = await api.patch(`/api/sucursales/${sucursalId}`, horarioForm);
+      setSucursal(actualizada);
+      setToast('Horario de turnos actualizado');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setGuardandoHorario(false);
+    }
+  }
+
+  function abrirAlta(fecha, turnoTipo) {
+    setCeldaAbierta({ fecha, turnoTipo });
+    setFormAlta({ responsable: null, puesto: '' });
+  }
+
+  async function confirmarAlta() {
+    if (!formAlta.responsable || !formAlta.puesto) { setError('Elegí un colaborador (el puesto se completa solo)'); return; }
+    setGuardandoAlta(true);
+    setError('');
+    try {
+      await api.post('/api/calendario/turnos', {
+        sucursal_id: Number(sucursalId), fecha: celdaAbierta.fecha, turno_tipo: celdaAbierta.turnoTipo,
+        responsable_user_id: formAlta.responsable.id, puesto: formAlta.puesto, notificar: true,
+      });
+      setCeldaAbierta(null);
+      setToast('Turno asignado');
+      recargar();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setGuardandoAlta(false);
+    }
+  }
+
+  async function eliminarTurno(id) {
+    try {
+      await api.del(`/api/calendario/${id}`);
+      recargar();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function resolverSolicitud(id) {
+    try {
+      await api.post(`/api/calendario/${id}/resolver-solicitud`);
+      recargar();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  function alternarDia(valor) {
+    setFormProgramar((f) => ({
+      ...f, diasSemana: f.diasSemana.includes(valor) ? f.diasSemana.filter((d) => d !== valor) : [...f.diasSemana, valor],
+    }));
+  }
+
+  async function enviarProgramacion(e) {
+    e.preventDefault();
+    setError('');
+    if (!formProgramar.responsable) { setError('Elegí un colaborador'); return; }
+    if (!formProgramar.puesto) { setError('Elegí un puesto'); return; }
+    if (!formProgramar.diasSemana.length) { setError('Elegí al menos un día de la semana'); return; }
+    setGuardandoProgramar(true);
+    try {
+      const resultado = await api.post('/api/calendario/turnos/programar', {
+        sucursal_id: Number(sucursalId), responsable_user_id: formProgramar.responsable.id, puesto: formProgramar.puesto,
+        turno_tipo: formProgramar.turnoTipo, dias_semana: formProgramar.diasSemana,
+        fecha_desde: formProgramar.fechaDesde, fecha_hasta: formProgramar.fechaHasta || null, notificar: formProgramar.notificar,
+      });
+      setToast(`${resultado.creados} turnos programados` + (resultado.ventanaSinFin ? ` (próximos ${resultado.ventanaSinFin} días - sin fecha hasta, hay que volver a programar más adelante)` : ''));
+      setFormProgramar({ responsable: null, puesto: '', turnoTipo: 'DIURNO', diasSemana: [], fechaDesde: hoyISO(), fechaHasta: '', notificar: true });
+      recargar();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setGuardandoProgramar(false);
+    }
+  }
+
+  function navegar(delta) {
+    const nueva = new Date(ancla);
+    if (vista === 'SEMANA') nueva.setDate(nueva.getDate() + delta * 7);
+    else nueva.setMonth(nueva.getMonth() + delta);
+    setAncla(nueva);
+  }
+
+  function irAHoy() {
+    setAncla(new Date());
+  }
+
+  function CeldaTurno({ fecha, turnoTipo }) {
+    const claveFecha = aClaveDia(fecha);
+    const abierta = celdaAbierta?.fecha === claveFecha && celdaAbierta?.turnoTipo === turnoTipo;
+    return (
+      <div className="border border-gray-100 rounded-lg p-1.5 bg-gray-50/50">
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-[10px] font-semibold text-gray-500 uppercase">{TURNO_LABEL[turnoTipo]}</span>
+          <button onClick={() => abrirAlta(claveFecha, turnoTipo)} className="text-fat-bordo-600 hover:bg-fat-bordo-50 rounded w-4 h-4 leading-none text-sm font-bold">+</button>
+        </div>
+        <div className="space-y-1">
+          {PUESTOS.map((p) => {
+            const lista = turnosPorDia.get(`${claveFecha}|${turnoTipo}|${p}`) || [];
+            return (
+              <div key={p} className="text-[10px]">
+                <span className="text-gray-400">{PUESTO_LABEL[p]} ({lista.length})</span>
+                {lista.length > 0 && (
+                  <div className="flex flex-wrap gap-0.5 mt-0.5">
+                    {lista.map((t) => (
+                      <span key={t.id} className={`inline-flex items-center gap-0.5 px-1 py-0.5 rounded ${t.solicitud_revision_estado === 'PENDIENTE' ? 'bg-yellow-100 text-yellow-700' : 'bg-white border border-gray-200 text-gray-700'}`}>
+                        {t.responsable_nombre?.split(' ')[0] || '—'}
+                        <button onClick={() => eliminarTurno(t.id)} className="text-gray-300 hover:text-fat-bordo-600 leading-none">&times;</button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        {abierta && (
+          <div className="mt-1.5 pt-1.5 border-t border-gray-200 space-y-1.5">
+            <BuscadorResponsable
+              sucursalId={sucursalId} label="" nombreValue={formAlta.responsable?.nombre}
+              onChange={(id, u) => setFormAlta({ responsable: u, puesto: u?.puesto || '' })}
+            />
+            <select
+              className="w-full rounded border border-gray-300 px-1 py-1 text-[11px]"
+              value={formAlta.puesto} onChange={(e) => setFormAlta({ ...formAlta, puesto: e.target.value })}
+            >
+              <option value="">Puesto…</option>
+              {PUESTOS.map((p) => <option key={p} value={p}>{PUESTO_LABEL[p]}</option>)}
+            </select>
+            <div className="flex gap-1">
+              <button onClick={confirmarAlta} disabled={guardandoAlta} className="flex-1 bg-fat-bordo-500 text-white text-[11px] rounded py-1 disabled:opacity-50">{guardandoAlta ? '...' : 'Agregar'}</button>
+              <button onClick={() => setCeldaAbierta(null)} className="flex-1 bg-white border border-gray-300 text-[11px] rounded py-1">Cancelar</button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <h1 className="text-xl font-semibold text-gray-900">Gestionar turnos</h1>
+
+      {usuario.rol === 'ADMIN' && (
+        <Select label="Sucursal" value={sucursalId} onChange={(e) => setSucursalId(e.target.value)}>
+          <option value="">Elegí una sucursal</option>
+          {sucursales.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+        </Select>
+      )}
+
+      {!sucursalId && usuario.rol === 'ADMIN' && <p className="text-sm text-gray-400">Elegí una sucursal para empezar.</p>}
+
+      {sucursalId && (
+        <>
+          {horarioForm && (
+            <Tarjeta className="p-4">
+              <h2 className="text-sm font-semibold text-gray-900 mb-2">Horario de turnos de la sucursal</h2>
+              <form onSubmit={guardarHorario} className="flex flex-wrap items-end gap-3">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Diurno desde</label>
+                  <input type="time" className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm" value={horarioForm.turno_diurno_desde} onChange={(e) => setHorarioForm({ ...horarioForm, turno_diurno_desde: e.target.value })} />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">hasta</label>
+                  <input type="time" className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm" value={horarioForm.turno_diurno_hasta} onChange={(e) => setHorarioForm({ ...horarioForm, turno_diurno_hasta: e.target.value })} />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Nocturno desde</label>
+                  <input type="time" className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm" value={horarioForm.turno_nocturno_desde} onChange={(e) => setHorarioForm({ ...horarioForm, turno_nocturno_desde: e.target.value })} />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">hasta</label>
+                  <input type="time" className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm" value={horarioForm.turno_nocturno_hasta} onChange={(e) => setHorarioForm({ ...horarioForm, turno_nocturno_hasta: e.target.value })} />
+                </div>
+                <Boton ancho="w-auto" type="submit" cargando={guardandoHorario}>Guardar</Boton>
+              </form>
+            </Tarjeta>
+          )}
+
+          {solicitudes && solicitudes.length > 0 && (
+            <Tarjeta className="p-4 border-yellow-200 bg-yellow-50/50">
+              <h2 className="text-sm font-semibold text-gray-900 mb-2">Solicitudes de revisión pendientes</h2>
+              <div className="space-y-2">
+                {solicitudes.map((s) => (
+                  <div key={s.id} className="text-sm bg-white rounded-lg border border-yellow-200 p-2.5">
+                    <p className="font-medium text-gray-900">{s.responsable_nombre} · {PUESTO_LABEL[s.puesto] || s.puesto}</p>
+                    <p className="text-xs text-gray-500">{new Date(s.fecha_hora).toLocaleString('es-AR')}</p>
+                    <p className="text-xs text-gray-600 italic mt-1">"{s.solicitud_revision_motivo}"</p>
+                    <div className="flex items-center gap-3 mt-2">
+                      <div className="flex-1">
+                        <BuscadorResponsable sucursalId={sucursalId} label="Reasignar a" onChange={async (id) => { if (id) { await api.patch(`/api/calendario/${s.id}`, { responsable_user_id: id }); recargar(); } }} />
+                      </div>
+                      <button onClick={() => resolverSolicitud(s.id)} className="text-xs text-gray-500 hover:text-fat-bordo-600 shrink-0">Descartar</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Tarjeta>
+          )}
+
+          <Tarjeta className="p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+              <div className="flex items-center gap-2">
+                <button className="px-2 py-1 rounded-lg border border-gray-300 text-sm" onClick={() => navegar(-1)}>←</button>
+                <p className="text-sm font-medium text-gray-800 min-w-[160px] text-center">
+                  {vista === 'SEMANA'
+                    ? `${semana[0].toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })} — ${semana[6].toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })}`
+                    : ancla.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' })}
+                </p>
+                <button className="px-2 py-1 rounded-lg border border-gray-300 text-sm" onClick={() => navegar(1)}>→</button>
+                <button className="text-sm text-fat-bordo-600 hover:underline ml-1" onClick={irAHoy}>Hoy</button>
+              </div>
+              <div className="flex rounded-lg border border-gray-300 overflow-hidden text-sm">
+                <button onClick={() => setVista('SEMANA')} className={`px-3 py-1 ${vista === 'SEMANA' ? 'bg-fat-bordo-500 text-white' : 'bg-white text-gray-600'}`}>Semana</button>
+                <button onClick={() => setVista('MES')} className={`px-3 py-1 ${vista === 'MES' ? 'bg-fat-bordo-500 text-white' : 'bg-white text-gray-600'}`}>Mes</button>
+              </div>
+            </div>
+
+            {!turnos && <Cargando />}
+
+            {turnos && vista === 'SEMANA' && (
+              <div className="grid grid-cols-7 gap-1.5 overflow-x-auto">
+                {semana.map((d) => (
+                  <div key={aClaveDia(d)} className="min-w-[130px]">
+                    <p className="text-xs font-medium text-gray-700 text-center mb-1">
+                      {d.toLocaleDateString('es-AR', { weekday: 'short', day: '2-digit' })}
+                    </p>
+                    <div className="space-y-1.5">
+                      <CeldaTurno fecha={d} turnoTipo="DIURNO" />
+                      <CeldaTurno fecha={d} turnoTipo="NOCTURNO" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {turnos && vista === 'MES' && (
+              <div className="grid grid-cols-7 gap-px bg-gray-200 rounded-lg overflow-hidden border border-gray-200">
+                {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map((d) => (
+                  <div key={d} className="bg-gray-50 text-center text-xs font-medium text-gray-500 py-1.5">{d}</div>
+                ))}
+                {grillaMes.map((d, i) => {
+                  const delMes = d.getMonth() === ancla.getMonth();
+                  const totales = totalesPorDia.get(aClaveDia(d)) || { DIURNO: 0, NOCTURNO: 0 };
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => { setAncla(d); setVista('SEMANA'); }}
+                      className={`bg-white min-h-[64px] p-1.5 text-left hover:bg-gray-50 ${!delMes ? 'opacity-40' : ''}`}
+                    >
+                      <span className="text-xs text-gray-600">{d.getDate()}</span>
+                      {(totales.DIURNO > 0 || totales.NOCTURNO > 0) && (
+                        <div className="mt-1 space-y-0.5">
+                          {totales.DIURNO > 0 && <p className="text-[10px] bg-fat-amarillo-100 text-fat-amarillo-800 rounded px-1">D: {totales.DIURNO}</p>}
+                          {totales.NOCTURNO > 0 && <p className="text-[10px] bg-fat-celeste-100 text-fat-celeste-800 rounded px-1">N: {totales.NOCTURNO}</p>}
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </Tarjeta>
+
+          {error && <p className="text-sm text-fat-bordo-600">{error}</p>}
+
+          <Tarjeta className="p-4 space-y-3">
+            <h2 className="text-sm font-semibold text-gray-900">Programar asignaciones</h2>
+            <p className="text-xs text-gray-400">Asigná a alguien de forma recurrente, sin tener que repetirlo cada semana a mano.</p>
+            <form onSubmit={enviarProgramacion} className="space-y-3">
+              <BuscadorResponsable
+                sucursalId={sucursalId} label="Colaborador" nombreValue={formProgramar.responsable?.nombre}
+                onChange={(id, u) => setFormProgramar({ ...formProgramar, responsable: u, puesto: u?.puesto || formProgramar.puesto })}
+              />
+              <div className="grid grid-cols-2 gap-3">
+                <Select label="Puesto" value={formProgramar.puesto} onChange={(e) => setFormProgramar({ ...formProgramar, puesto: e.target.value })}>
+                  <option value="">Elegí un puesto</option>
+                  {PUESTOS.map((p) => <option key={p} value={p}>{PUESTO_LABEL[p]}</option>)}
+                </Select>
+                <Select label="Turno" value={formProgramar.turnoTipo} onChange={(e) => setFormProgramar({ ...formProgramar, turnoTipo: e.target.value })}>
+                  <option value="DIURNO">Diurno</option>
+                  <option value="NOCTURNO">Nocturno</option>
+                </Select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Días de la semana</label>
+                <div className="flex gap-1.5 flex-wrap">
+                  {DIAS_SEMANA_UI.map((d) => (
+                    <button
+                      key={d.valor} type="button" onClick={() => alternarDia(d.valor)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-medium border ${formProgramar.diasSemana.includes(d.valor) ? 'bg-fat-bordo-500 text-white border-fat-bordo-500' : 'bg-white text-gray-600 border-gray-300'}`}
+                    >
+                      {d.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Campo label="Desde" type="date" required value={formProgramar.fechaDesde} onChange={(e) => setFormProgramar({ ...formProgramar, fechaDesde: e.target.value })} />
+                <Campo label="Hasta (opcional)" type="date" value={formProgramar.fechaHasta} onChange={(e) => setFormProgramar({ ...formProgramar, fechaHasta: e.target.value })} />
+              </div>
+              <label className="flex items-center gap-2 text-sm text-gray-600">
+                <input type="checkbox" checked={formProgramar.notificar} onChange={(e) => setFormProgramar({ ...formProgramar, notificar: e.target.checked })} />
+                Notificar al colaborador
+              </label>
+              <Boton type="submit" ancho="w-auto" cargando={guardandoProgramar}>Programar</Boton>
+            </form>
+          </Tarjeta>
+        </>
+      )}
+
+      {toast && <Toast mensaje={toast} onCerrar={() => setToast('')} />}
+    </div>
+  );
+}

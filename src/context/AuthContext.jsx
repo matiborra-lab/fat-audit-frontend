@@ -30,8 +30,8 @@ export function AuthProvider({ children }) {
     cargarUsuario();
   }, [cargarUsuario]);
 
-  const login = useCallback(async (email, password) => {
-    const data = await api.post('/api/auth/login', { email, password }, { auth: false });
+  const login = useCallback(async (identificador, password) => {
+    const data = await api.post('/api/auth/login', { identificador, password }, { auth: false });
     guardarToken(data.token);
     setUsuario(data.usuario);
     return data.usuario;

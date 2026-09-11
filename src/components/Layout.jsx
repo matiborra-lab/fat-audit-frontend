@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { api } from '../api/client';
 
 const linkClass = ({ isActive }) =>
   'px-3 py-2 rounded-lg text-sm font-medium ' +
@@ -11,6 +12,10 @@ const linkClassDrawer = ({ isActive }) =>
   (isActive ? 'bg-fat-bordo-50 text-fat-bordo-700' : 'text-gray-600 hover:bg-gray-100');
 
 function itemsDeNav(rol) {
+  // Un Colaborador solo ve su calendario (sus turnos y tareas/auditorías
+  // asignadas) - nada de dashboard, historial ni gestión.
+  if (rol === 'COLABORADOR') return [{ to: '/calendario', label: 'Calendario' }];
+
   const items = [
     { to: '/', label: 'Dashboard', end: true },
     { to: '/historial', label: 'Historial' },
@@ -20,11 +25,62 @@ function itemsDeNav(rol) {
   if (rol === 'ADMIN' || rol === 'AUDITOR') {
     items.push({ to: '/auditorias', label: 'Auditorías' });
   }
+  if (rol === 'ADMIN' || rol === 'GERENTE') {
+    items.push({ to: '/turnos', label: 'Turnos' });
+    items.push({ to: '/usuarios', label: rol === 'GERENTE' ? 'Colaboradores' : 'Usuarios' });
+  }
   if (rol === 'ADMIN') {
     items.push({ to: '/sucursales', label: 'Sucursales' });
-    items.push({ to: '/usuarios', label: 'Usuarios' });
   }
   return items;
+}
+
+function CampanaNotificaciones() {
+  const [notificaciones, setNotificaciones] = useState([]);
+  const [abierto, setAbierto] = useState(false);
+
+  function recargar() {
+    api.get('/api/notificaciones').then(setNotificaciones).catch(() => {});
+  }
+  useEffect(() => {
+    recargar();
+    const id = setInterval(recargar, 60000);
+    return () => clearInterval(id);
+  }, []);
+
+  const sinLeer = notificaciones.filter((n) => !n.leida_en).length;
+
+  async function marcarLeida(n) {
+    if (!n.leida_en) await api.post(`/api/notificaciones/${n.id}/leida`);
+    recargar();
+  }
+
+  return (
+    <div className="relative">
+      <button onClick={() => setAbierto((a) => !a)} className="relative text-gray-500 hover:text-gray-700 p-1.5" aria-label="Notificaciones">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+          <path d="M10 2a6 6 0 00-6 6v3.586l-1.707 1.707A1 1 0 003 15h14a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM8.5 17a1.5 1.5 0 003 0h-3z" />
+        </svg>
+        {sinLeer > 0 && (
+          <span className="absolute -top-0.5 -right-0.5 bg-fat-bordo-600 text-white text-[10px] leading-none rounded-full w-4 h-4 flex items-center justify-center">
+            {sinLeer > 9 ? '9+' : sinLeer}
+          </span>
+        )}
+      </button>
+      {abierto && (
+        <div className="absolute right-0 mt-2 w-80 max-w-[90vw] bg-white border border-gray-200 rounded-lg shadow-xl max-h-96 overflow-y-auto z-50">
+          {notificaciones.length === 0 && <p className="text-sm text-gray-400 p-4">No tenés notificaciones.</p>}
+          {notificaciones.map((n) => (
+            <button key={n.id} onClick={() => marcarLeida(n)} className={`w-full text-left px-3 py-2.5 border-b border-gray-50 last:border-0 hover:bg-gray-50 ${!n.leida_en ? 'bg-fat-bordo-50/40' : ''}`}>
+              <p className="text-sm font-medium text-gray-900">{n.titulo}</p>
+              {n.cuerpo && <p className="text-xs text-gray-500 mt-0.5">{n.cuerpo}</p>}
+              <p className="text-[10px] text-gray-400 mt-1">{new Date(n.creado_en).toLocaleString('es-AR')}</p>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function Layout() {
@@ -49,6 +105,9 @@ export default function Layout() {
             </button>
             <img src="/brand/fatburger_logo.png" alt="FAT Audit" className="h-8" />
           </div>
+          <div className="flex md:hidden items-center gap-1">
+            <CampanaNotificaciones />
+          </div>
 
           <div className="hidden md:flex items-center gap-6">
             <img src="/brand/fatburger_logo.png" alt="FAT Audit" className="h-9" />
@@ -59,6 +118,7 @@ export default function Layout() {
             </nav>
           </div>
           <div className="hidden md:flex items-center gap-3">
+            <CampanaNotificaciones />
             <span className="text-sm text-gray-500">{usuario.nombre || usuario.email} · {usuario.rol}</span>
             <button onClick={logout} className="text-sm text-fat-bordo-600 hover:underline">Salir</button>
           </div>

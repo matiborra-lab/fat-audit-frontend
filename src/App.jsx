@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
+import { useAuth } from './context/AuthContext';
 import { RequireAuth, RequireRole } from './components/ProtectedRoute';
 import Layout from './components/Layout';
 import Login from './pages/Login';
@@ -9,12 +10,21 @@ import Dashboard from './pages/Dashboard';
 import Historial from './pages/Historial';
 import HistorialDetalle from './pages/HistorialDetalle';
 import Calendario from './pages/Calendario';
+import GestionarTurnos from './pages/GestionarTurnos';
 import Ejecutar from './pages/Ejecutar';
 import Ejecucion from './pages/Ejecucion';
 import Auditorias from './pages/Auditorias';
 import AuditoriaConstructor from './pages/AuditoriaConstructor';
 import Sucursales from './pages/Sucursales';
 import Usuarios from './pages/Usuarios';
+
+// Un Colaborador no tiene dashboard - su pantalla inicial es el calendario
+// (donde ve sus turnos y tareas asignadas).
+function Inicio() {
+  const { usuario } = useAuth();
+  if (usuario.rol === 'COLABORADOR') return <Navigate to="/calendario" replace />;
+  return <Dashboard />;
+}
 
 export default function App() {
   return (
@@ -27,12 +37,20 @@ export default function App() {
 
           <Route element={<RequireAuth />}>
             <Route element={<Layout />}>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/historial" element={<Historial />} />
-              <Route path="/historial/:id" element={<HistorialDetalle />} />
+              <Route path="/" element={<Inicio />} />
               <Route path="/calendario" element={<Calendario />} />
-              <Route path="/ejecutar" element={<Ejecutar />} />
-              <Route path="/ejecucion/:id" element={<Ejecucion />} />
+
+              <Route element={<RequireRole roles={['ADMIN', 'AUDITOR', 'GERENTE']} />}>
+                <Route path="/historial" element={<Historial />} />
+                <Route path="/historial/:id" element={<HistorialDetalle />} />
+                <Route path="/ejecutar" element={<Ejecutar />} />
+                <Route path="/ejecucion/:id" element={<Ejecucion />} />
+              </Route>
+
+              <Route element={<RequireRole roles={['ADMIN', 'GERENTE']} />}>
+                <Route path="/turnos" element={<GestionarTurnos />} />
+                <Route path="/usuarios" element={<Usuarios />} />
+              </Route>
 
               <Route element={<RequireRole roles={['ADMIN', 'AUDITOR']} />}>
                 <Route path="/auditorias" element={<Auditorias />} />
@@ -41,7 +59,6 @@ export default function App() {
 
               <Route element={<RequireRole roles={['ADMIN']} />}>
                 <Route path="/sucursales" element={<Sucursales />} />
-                <Route path="/usuarios" element={<Usuarios />} />
               </Route>
             </Route>
           </Route>
