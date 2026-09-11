@@ -56,9 +56,14 @@ export default function GestionarTurnos() {
   const [guardandoAlta, setGuardandoAlta] = useState(false);
 
   const [formProgramar, setFormProgramar] = useState({
-    responsable: null, puesto: '', turnoTipo: 'DIURNO', diasSemana: [], fechaDesde: hoyISO(), fechaHasta: '', notificar: true,
+    responsable: null, puesto: '', turnoTipo: 'DIURNO', diasSemana: [], fechaDesde: hoyISO(), fechaHasta: '',
   });
   const [guardandoProgramar, setGuardandoProgramar] = useState(false);
+
+  const [notificarAlAsignar, setNotificarAlAsignar] = useState(true);
+  const [asignando, setAsignando] = useState(false);
+  const [fallidosNotificacion, setFallidosNotificacion] = useState([]);
+  const [reintentando, setReintentando] = useState(false);
 
   const semana = useMemo(() => generarSemana(lunesDeSemana(ancla)), [ancla]);
   const grillaMes = useMemo(() => generarGrillaMes(ancla.getFullYear(), ancla.getMonth()), [ancla]);
@@ -117,10 +122,10 @@ export default function GestionarTurnos() {
     try {
       await api.post('/api/calendario/turnos', {
         sucursal_id: Number(sucursalId), fecha: celdaAbierta.fecha, turno_tipo: celdaAbierta.turnoTipo,
-        responsable_user_id: formAlta.responsable.id, puesto: formAlta.puesto, notificar: true,
+        responsable_user_id: formAlta.responsable.id, puesto: formAlta.puesto,
       });
       setCeldaAbierta(null);
-      setToast('Turno asignado');
+      setToast('Turno agregado - pendiente de confirmar con "Asignar turnos"');
       recargar();
     } catch (err) {
       setError(err.message);
@@ -164,15 +169,54 @@ export default function GestionarTurnos() {
       const resultado = await api.post('/api/calendario/turnos/programar', {
         sucursal_id: Number(sucursalId), responsable_user_id: formProgramar.responsable.id, puesto: formProgramar.puesto,
         turno_tipo: formProgramar.turnoTipo, dias_semana: formProgramar.diasSemana,
-        fecha_desde: formProgramar.fechaDesde, fecha_hasta: formProgramar.fechaHasta || null, notificar: formProgramar.notificar,
+        fecha_desde: formProgramar.fechaDesde, fecha_hasta: formProgramar.fechaHasta || null,
       });
-      setToast(`${resultado.creados} turnos programados` + (resultado.ventanaSinFin ? ` (próximos ${resultado.ventanaSinFin} días - sin fecha hasta, hay que volver a programar más adelante)` : ''));
-      setFormProgramar({ responsable: null, puesto: '', turnoTipo: 'DIURNO', diasSemana: [], fechaDesde: hoyISO(), fechaHasta: '', notificar: true });
+      setToast(`${resultado.creados} turnos programados, pendientes de confirmar` + (resultado.ventanaSinFin ? ` (próximos ${resultado.ventanaSinFin} días - sin fecha hasta, hay que volver a programar más adelante)` : ''));
+      setFormProgramar({ responsable: null, puesto: '', turnoTipo: 'DIURNO', diasSemana: [], fechaDesde: hoyISO(), fechaHasta: '' });
       recargar();
     } catch (err) {
       setError(err.message);
     } finally {
       setGuardandoProgramar(false);
+    }
+  }
+
+  const pendientes = (turnos || []).filter((t) => !t.asignacion_confirmada);
+
+  async function asignarTurnos() {
+    setAsignando(true);
+    setError('');
+    setFallidosNotificacion([]);
+    try {
+      const desde = aClaveDia(diasVisibles[0]);
+      const hasta = aClaveDia(diasVisibles[diasVisibles.length - 1]);
+      const resultado = await api.post('/api/calendario/turnos/asignar', {
+        sucursal_id: Number(sucursalId), desde, hasta, notificar: notificarAlAsignar,
+      });
+      setFallidosNotificacion(resultado.fallidos || []);
+      let msg = `${resultado.confirmados} turno(s) asignado(s)`;
+      if (notificarAlAsignar && resultado.notificados?.length) msg += ` · ${resultado.notificados.length} notificado(s)`;
+      if (resultado.fallidos?.length) msg += ` · no se pudo notificar a ${resultado.fallidos.length}`;
+      setToast(msg);
+      recargar();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setAsignando(false);
+    }
+  }
+
+  async function reintentarNotificacion() {
+    setReintentando(true);
+    try {
+      const ids = fallidosNotificacion.flatMap((f) => f.evento_ids);
+      const resultado = await api.post('/api/calendario/turnos/notificar', { ids });
+      setFallidosNotificacion(resultado.fallidos || []);
+      setToast(resultado.fallidos?.length ? `Todavía no se pudo notificar a ${resultado.fallidos.length}` : 'Notificación reenviada correctamente');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setReintentando(false);
     }
   }
 
@@ -216,8 +260,16 @@ export default function GestionarTurnos() {
                 {lista.length > 0 && (
                   <div className="flex flex-wrap gap-0.5 mt-0.5">
                     {lista.map((t) => (
-                      <span key={t.id} className={`inline-flex items-center gap-0.5 px-1 py-0.5 rounded ${t.solicitud_revision_estado === 'PENDIENTE' ? 'bg-yellow-100 text-yellow-700' : 'bg-white border border-gray-200 text-gray-700'}`}>
-                        {t.responsable_nombre?.split(' ')[0] || '—'}
+                      <span
+                        key={t.id}
+                        title={t.asignacion_confirmada ? 'Asignado' : 'Pendiente de confirmar'}
+                        className={`inline-flex items-center gap-0.5 px-1 py-0.5 rounded ${
+                          t.solicitud_revision_estado === 'PENDIENTE' ? 'bg-yellow-100 text-yellow-700'
+                          : !t.asignacion_confirmada ? 'bg-gray-100 text-gray-500'
+                          : 'bg-white border border-gray-200 text-gray-700'
+                        }`}
+                      >
+                        {!t.asignacion_confirmada ? '🕒 ' : '✓ '}{t.responsable_nombre?.split(' ')[0] || '—'}
                         <button onClick={() => eliminarTurno(t.id)} className="text-gray-300 hover:text-fat-bordo-600 leading-none">&times;</button>
                       </span>
                     ))}
@@ -355,6 +407,28 @@ export default function GestionarTurnos() {
             )}
           </Tarjeta>
 
+          {pendientes.length > 0 && (
+            <Tarjeta className="p-4 border-fat-bordo-200 bg-fat-bordo-50/30">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-gray-900">🕒 {pendientes.length} turno{pendientes.length > 1 ? 's' : ''} pendiente{pendientes.length > 1 ? 's' : ''} de confirmar</p>
+                  <label className="flex items-center gap-2 text-xs text-gray-600 mt-1">
+                    <input type="checkbox" checked={notificarAlAsignar} onChange={(e) => setNotificarAlAsignar(e.target.checked)} />
+                    Notificar colaboradores
+                  </label>
+                </div>
+                <Boton ancho="w-auto" cargando={asignando} onClick={asignarTurnos}>✓ Asignar turnos</Boton>
+              </div>
+            </Tarjeta>
+          )}
+
+          {fallidosNotificacion.length > 0 && (
+            <Tarjeta className="p-3 border-yellow-200 bg-yellow-50/50">
+              <p className="text-xs text-yellow-800 mb-2">No se pudo notificar a: {fallidosNotificacion.map((f) => f.nombre || 'colaborador').join(', ')}</p>
+              <Boton ancho="w-auto" variante="secundario" cargando={reintentando} onClick={reintentarNotificacion}>Reintentar notificación</Boton>
+            </Tarjeta>
+          )}
+
           {error && <p className="text-sm text-fat-bordo-600">{error}</p>}
 
           <Tarjeta className="p-4 space-y-3">
@@ -392,10 +466,6 @@ export default function GestionarTurnos() {
                 <Campo label="Desde" type="date" required value={formProgramar.fechaDesde} onChange={(e) => setFormProgramar({ ...formProgramar, fechaDesde: e.target.value })} />
                 <Campo label="Hasta (opcional)" type="date" value={formProgramar.fechaHasta} onChange={(e) => setFormProgramar({ ...formProgramar, fechaHasta: e.target.value })} />
               </div>
-              <label className="flex items-center gap-2 text-sm text-gray-600">
-                <input type="checkbox" checked={formProgramar.notificar} onChange={(e) => setFormProgramar({ ...formProgramar, notificar: e.target.checked })} />
-                Notificar al colaborador
-              </label>
               <Boton type="submit" ancho="w-auto" cargando={guardandoProgramar}>Programar</Boton>
             </form>
           </Tarjeta>
