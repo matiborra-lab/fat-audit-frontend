@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../api/client';
+import { soportaPush, suscripcionActual, activarPush, desactivarPush } from '../utils/push';
 
 const linkClass = ({ isActive }) =>
   'px-3 py-2 rounded-lg text-sm font-medium ' +
@@ -38,6 +39,9 @@ function itemsDeNav(rol) {
 function CampanaNotificaciones() {
   const [notificaciones, setNotificaciones] = useState([]);
   const [abierto, setAbierto] = useState(false);
+  // 'no_soportado' | 'desactivado' | 'activado' | 'activando'
+  const [estadoPush, setEstadoPush] = useState('desactivado');
+  const [errorPush, setErrorPush] = useState('');
 
   function recargar() {
     api.get('/api/notificaciones').then(setNotificaciones).catch(() => {});
@@ -48,11 +52,33 @@ function CampanaNotificaciones() {
     return () => clearInterval(id);
   }, []);
 
+  useEffect(() => {
+    if (!soportaPush()) { setEstadoPush('no_soportado'); return; }
+    suscripcionActual().then((s) => setEstadoPush(s ? 'activado' : 'desactivado')).catch(() => setEstadoPush('desactivado'));
+  }, []);
+
   const sinLeer = notificaciones.filter((n) => !n.leida_en).length;
 
   async function marcarLeida(n) {
     if (!n.leida_en) await api.post(`/api/notificaciones/${n.id}/leida`);
     recargar();
+  }
+
+  async function alternarPush() {
+    setErrorPush('');
+    setEstadoPush('activando');
+    try {
+      if (estadoPush === 'activado') {
+        await desactivarPush();
+        setEstadoPush('desactivado');
+      } else {
+        await activarPush();
+        setEstadoPush('activado');
+      }
+    } catch (err) {
+      setErrorPush(err.message);
+      setEstadoPush(estadoPush === 'activado' ? 'activado' : 'desactivado');
+    }
   }
 
   return (
@@ -77,6 +103,20 @@ function CampanaNotificaciones() {
               <p className="text-[10px] text-gray-400 mt-1">{new Date(n.creado_en).toLocaleString('es-AR')}</p>
             </button>
           ))}
+          {estadoPush !== 'no_soportado' && (
+            <div className="p-2.5 bg-gray-50/70">
+              <button
+                onClick={alternarPush}
+                disabled={estadoPush === 'activando'}
+                className="w-full text-xs font-medium text-fat-bordo-600 hover:underline disabled:opacity-50 text-left"
+              >
+                {estadoPush === 'activado' && 'Notificaciones push activadas - desactivar'}
+                {estadoPush === 'desactivado' && 'Activar notificaciones push en este dispositivo'}
+                {estadoPush === 'activando' && 'Un momento…'}
+              </button>
+              {errorPush && <p className="text-[10px] text-fat-bordo-600 mt-1">{errorPush}</p>}
+            </div>
+          )}
         </div>
       )}
     </div>
