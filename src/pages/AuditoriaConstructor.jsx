@@ -112,6 +112,7 @@ export default function AuditoriaConstructor() {
   const [sucursales, setSucursales] = useState([]);
   const [aplicaTodas, setAplicaTodas] = useState(true);
   const [sucursalesHabilitadas, setSucursalesHabilitadas] = useState(new Set());
+  const [aprobadoDesde, setAprobadoDesde] = useState('');
   const [toast, setToast] = useState('');
   const [error, setError] = useState('');
   const [guardando, setGuardando] = useState(false);
@@ -122,6 +123,7 @@ export default function AuditoriaConstructor() {
       setEstructura(aEstructuraEditable(data));
       setAplicaTodas(data.aplica_todas_sucursales);
       setSucursalesHabilitadas(new Set(data.sucursal_ids));
+      setAprobadoDesde(data.puntaje_minimo_aprobacion != null ? String(Math.round(data.puntaje_minimo_aprobacion * 1000) / 10) : '');
     });
     api.get('/api/sucursales').then(setSucursales);
   }
@@ -155,6 +157,19 @@ export default function AuditoriaConstructor() {
       sucursal_ids: [...sucursalesHabilitadas],
     });
     setToast('Sucursales actualizadas');
+  }
+
+  async function guardarAprobacion() {
+    setError('');
+    try {
+      const actualizada = await api.patch(`/api/plantillas/${id}`, {
+        puntaje_minimo_aprobacion: aprobadoDesde === '' ? null : Number(aprobadoDesde) / 100,
+      });
+      setPlantilla(actualizada);
+      setToast('Umbral general actualizado');
+    } catch (err) {
+      setError(err.message);
+    }
   }
 
   async function publicar() {
@@ -193,6 +208,22 @@ export default function AuditoriaConstructor() {
           <SeccionAreas estructura={estructura} actualizar={actualizar} />
           <SeccionItems estructura={estructura} actualizar={actualizar} />
           <SeccionUmbrales estructura={estructura} actualizar={actualizar} />
+
+          <Tarjeta className="p-4">
+            <p className="font-medium text-gray-900 mb-1">Umbral general de aprobación</p>
+            <Leyenda>Si el puntaje total no llega a este %, la auditoría queda desaprobada — es un chequeo aparte de los umbrales por sector/área de arriba. Dejalo vacío para que solo decidan esos umbrales.</Leyenda>
+            <div className="flex items-center gap-2 mt-3">
+              <input
+                className="w-32 rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
+                type="number" min="0" max="100" step="0.1"
+                value={aprobadoDesde}
+                onChange={(e) => setAprobadoDesde(e.target.value)}
+                placeholder="sin mínimo"
+              />
+              <span className="text-sm text-gray-500">% aprobada desde</span>
+              <Boton ancho="w-auto" variante="secundario" onClick={guardarAprobacion}>Guardar</Boton>
+            </div>
+          </Tarjeta>
 
           <Tarjeta className="p-4">
             <p className="font-medium text-gray-900 mb-3">Sucursales habilitadas</p>

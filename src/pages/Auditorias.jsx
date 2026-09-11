@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
-import { Tarjeta, Campo, Select, Boton, Modal, Cargando } from '../components/ui';
+import { Tarjeta, Campo, Select, Boton, Modal, Leyenda, Cargando } from '../components/ui';
 
 const ESTADO_ESTILOS = {
   BORRADOR: 'bg-gray-100 text-gray-600',
@@ -13,7 +13,7 @@ export default function Auditorias() {
   const navigate = useNavigate();
   const [lista, setLista] = useState(null);
   const [modalAbierto, setModalAbierto] = useState(false);
-  const [form, setForm] = useState({ nombre: '', tipo: 'INTERNA', weighting_mode: 'CON_PESO' });
+  const [form, setForm] = useState({ nombre: '', tipo: 'INTERNA', weighting_mode: 'CON_PESO', aprobadoDesde: '' });
   const [error, setError] = useState('');
   const [guardando, setGuardando] = useState(false);
 
@@ -27,7 +27,10 @@ export default function Auditorias() {
     setError('');
     setGuardando(true);
     try {
-      const nueva = await api.post('/api/plantillas', form);
+      const nueva = await api.post('/api/plantillas', {
+        nombre: form.nombre, tipo: form.tipo, weighting_mode: form.weighting_mode,
+        puntaje_minimo_aprobacion: form.aprobadoDesde === '' ? null : Number(form.aprobadoDesde) / 100,
+      });
       navigate(`/auditorias/${nueva.id}`);
     } catch (err) {
       setError(err.message);
@@ -72,6 +75,14 @@ export default function Auditorias() {
               <option value="CON_PESO">Con pesos personalizados</option>
               <option value="SIN_PESO">Sin pesos (reparto igualitario)</option>
             </Select>
+            <Campo
+              label="Aprobada desde (% del puntaje total, opcional)"
+              type="number" min="0" max="100" step="0.1"
+              value={form.aprobadoDesde}
+              onChange={(e) => setForm({ ...form, aprobadoDesde: e.target.value })}
+              placeholder="ej: 75"
+            />
+            <Leyenda>Si el puntaje total no llega a este %, la auditoría queda desaprobada — independiente de los umbrales críticos por sector/área, que se configuran aparte. Dejalo vacío si solo querés que decidan esos umbrales.</Leyenda>
             {error && <p className="text-sm text-fat-bordo-600">{error}</p>}
             <Boton type="submit" cargando={guardando}>Crear y editar estructura</Boton>
           </form>

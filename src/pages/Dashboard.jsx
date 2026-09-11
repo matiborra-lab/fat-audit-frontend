@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
-import { Tarjeta, Semaforo, Resultado, Cargando } from '../components/ui';
+import { Tarjeta, Puntaje, Resultado, Cargando } from '../components/ui';
 
 function Tendencia({ valor }) {
   if (valor == null) return null;
@@ -59,8 +59,7 @@ export default function Dashboard() {
               </div>
               <div className="flex items-center gap-3">
                 <Tendencia valor={r.tendencia} />
-                {r.puntaje_total != null && <span className="text-sm font-semibold text-gray-700">{Math.round(r.puntaje_total * 100)}%</span>}
-                <Semaforo valor={r.semaforo} />
+                <Puntaje valor={r.puntaje_total} semaforo={r.semaforo} />
                 <Resultado valor={r.resultado} />
               </div>
             </Link>

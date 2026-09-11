@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api/client';
-import { Tarjeta, Boton, Semaforo, Resultado, Cargando } from '../components/ui';
+import { Tarjeta, Boton, Puntaje, Resultado, Cargando } from '../components/ui';
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -102,17 +102,19 @@ export default function HistorialDetalle() {
       </div>
 
       <Tarjeta className="p-4 flex flex-wrap items-center gap-4">
-        {run.puntaje_total != null && <span className="text-2xl font-bold text-gray-900">{Math.round(run.puntaje_total * 100)}%</span>}
-        <Semaforo valor={run.semaforo} />
+        <Puntaje valor={run.puntaje_total} semaforo={run.semaforo} tamano="lg" />
         <Resultado valor={run.resultado} />
         {run.estado === 'EN_PROGRESO' && <span className="text-sm text-gray-400">Auditoría en progreso</span>}
         {run.firma_nombre && <span className="text-sm text-gray-400 ml-auto">Firmado por {run.firma_nombre}</span>}
       </Tarjeta>
 
-      {detalle?.umbralesFallidos?.length > 0 && (
+      {(detalle?.umbralesFallidos?.length > 0 || detalle?.noAlcanzaMinimoGeneral) && (
         <Tarjeta className="p-4 bg-fat-bordo-50/40 border-fat-bordo-200">
-          <p className="text-sm font-medium text-fat-bordo-800 mb-1">Umbrales críticos no alcanzados</p>
+          <p className="text-sm font-medium text-fat-bordo-800 mb-1">Motivo de la desaprobación</p>
           <ul className="text-sm text-fat-bordo-700 list-disc list-inside">
+            {detalle.noAlcanzaMinimoGeneral && (
+              <li>Puntaje total {Math.round(run.puntaje_total * 100)}% — no alcanza el mínimo general de {Math.round(detalle.puntajeMinimoAprobacion * 100)}%</li>
+            )}
             {detalle.umbralesFallidos.map((u, i) => (
               <li key={i}>{u.tipo === 'SECTOR' ? 'Sector' : 'Área'}: {Math.round(u.score * 100)}% (mínimo {Math.round(u.porcentaje_minimo * 100)}%)</li>
             ))}

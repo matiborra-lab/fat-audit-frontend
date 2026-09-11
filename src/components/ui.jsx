@@ -102,20 +102,26 @@ export function AuthCard({ titulo, subtitulo, children }) {
   );
 }
 
-// Pastilla de semaforo - mismos 5 tramos que semaforo_config del backend.
-const SEMAFORO_ESTILOS = {
-  ROJO: 'bg-red-100 text-red-700',
-  NARANJA: 'bg-orange-100 text-orange-700',
-  AMARILLO: 'bg-yellow-100 text-yellow-800',
-  VERDE: 'bg-green-100 text-green-700',
-  DORADO: 'bg-fat-amarillo-100 text-fat-amarillo-800',
+// El semáforo se expresa coloreando el número del puntaje, no escribiendo
+// el nombre del color - mismos 5 tramos que semaforo_config del backend.
+const SEMAFORO_COLOR_TEXTO = {
+  ROJO: 'text-red-600',
+  NARANJA: 'text-orange-500',
+  AMARILLO: 'text-yellow-600',
+  VERDE: 'text-green-600',
+  DORADO: 'text-fat-amarillo-600',
 };
 
-export function Semaforo({ valor, className = '' }) {
-  if (!valor) return <span className={`text-gray-400 text-sm ${className}`}>—</span>;
+// tamaño: 'sm' (listados) | 'lg' (detalle) - controla el tamaño de fuente,
+// el color sale siempre de `semaforo`.
+export function Puntaje({ valor, semaforo, tamano = 'sm', className = '' }) {
+  const tamanos = { sm: 'text-sm', lg: 'text-2xl' };
+  if (valor == null) return <span className={`text-gray-400 ${tamanos[tamano]} ${className}`}>—</span>;
+  const pct = Math.round(valor * 100);
+  const color = SEMAFORO_COLOR_TEXTO[semaforo] || 'text-gray-700';
   return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${SEMAFORO_ESTILOS[valor] || 'bg-gray-100 text-gray-600'} ${className}`}>
-      {valor === 'DORADO' && '★ '}{valor}
+    <span className={`font-bold ${color} ${tamanos[tamano]} ${className}`}>
+      {semaforo === 'DORADO' && '★ '}{pct}%
     </span>
   );
 }

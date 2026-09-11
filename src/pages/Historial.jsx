@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
-import { Tarjeta, Select, Semaforo, Resultado, Cargando } from '../components/ui';
+import { Tarjeta, Select, Puntaje, Resultado, Cargando } from '../components/ui';
 
 const TIPOS = ['MARCA', 'INTERNA', 'SEGUIMIENTO'];
 const ESTADOS = ['EN_PROGRESO', 'COMPLETADA', 'CANCELADA'];
@@ -63,8 +63,7 @@ export default function Historial() {
                   </p>
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
-                  {r.puntaje_total != null && <span className="text-sm font-semibold text-gray-700">{Math.round(r.puntaje_total * 100)}%</span>}
-                  <Semaforo valor={r.semaforo} />
+                  <Puntaje valor={r.puntaje_total} semaforo={r.semaforo} />
                   <Resultado valor={r.resultado} />
                   {r.estado === 'EN_PROGRESO' && <span className="text-xs text-gray-400">en progreso</span>}
                 </div>
