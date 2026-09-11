@@ -4,11 +4,10 @@ import { useAuth } from '../context/AuthContext';
 import { api } from '../api/client';
 import { soportaPush, suscripcionActual, activarPush, desactivarPush } from '../utils/push';
 
-const linkClass = ({ isActive }) =>
-  'px-3 py-2 rounded-lg text-sm font-medium ' +
-  (isActive ? 'bg-fat-bordo-50 text-fat-bordo-700' : 'text-gray-600 hover:bg-gray-100');
-
-const linkClassDrawer = ({ isActive }) =>
+// Misma apariencia en la barra lateral de escritorio y en el panel de
+// celular - ambas son listas verticales, a diferencia del viejo menú
+// horizontal del header.
+const linkClassSidebar = ({ isActive }) =>
   'block px-3 py-2 rounded-lg text-sm font-medium ' +
   (isActive ? 'bg-fat-bordo-50 text-fat-bordo-700' : 'text-gray-600 hover:bg-gray-100');
 
@@ -135,61 +134,70 @@ export default function Layout() {
   }, [location.pathname]);
 
   return (
-    <div className="min-h-screen bg-fat-marfil-suave">
-      <header className="bg-white border-b border-gray-200">
-        <div className="max-w-[1400px] mx-auto px-4 h-14 flex items-center justify-between">
-          <div className="flex md:hidden items-center gap-3">
-            <button onClick={() => setMenuAbierto(true)} aria-label="Abrir menú" className="text-gray-500 hover:text-gray-700 -ml-1 p-1">
-              <svg width="22" height="22" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                <path fillRule="evenodd" d="M3 5h14a1 1 0 100-2H3a1 1 0 000 2zm0 6h14a1 1 0 100-2H3a1 1 0 000 2zm0 6h14a1 1 0 100-2H3a1 1 0 000 2z" clipRule="evenodd" />
-              </svg>
-            </button>
-            <img src="/brand/fatburger_logo.png" alt="FAT Audit" className="h-8" />
-          </div>
-          <div className="flex md:hidden items-center gap-1">
-            <CampanaNotificaciones />
-          </div>
-
-          <div className="hidden md:flex items-center gap-6">
-            <img src="/brand/fatburger_logo.png" alt="FAT Audit" className="h-9" />
-            <nav className="flex gap-1">
-              {items.map((it) => (
-                <NavLink key={it.to} to={it.to} end={it.end} className={linkClass}>{it.label}</NavLink>
-              ))}
-            </nav>
-          </div>
-          <div className="hidden md:flex items-center gap-3">
-            <CampanaNotificaciones />
-            <span className="text-sm text-gray-500">{usuario.nombre || usuario.email} · {usuario.rol}</span>
-            <button onClick={logout} className="text-sm text-fat-bordo-600 hover:underline">Salir</button>
-          </div>
+    <div className="min-h-screen bg-fat-marfil-suave md:flex">
+      {/* Barra lateral - solo escritorio, reemplaza el viejo menú horizontal
+          del header. Muestra únicamente los módulos permitidos para el rol
+          (ver itemsDeNav), igual que el panel de celular de más abajo. */}
+      <aside className="hidden md:flex md:flex-col md:w-60 md:shrink-0 md:h-screen md:sticky md:top-0 bg-white border-r border-gray-200">
+        <div className="h-16 flex items-center px-4 border-b border-gray-100 shrink-0">
+          <img src="/brand/fatburger_logo.png" alt="FAT Audit" className="h-9" />
         </div>
-      </header>
+        <nav className="flex-1 overflow-y-auto p-3 flex flex-col gap-1">
+          {items.map((it) => (
+            <NavLink key={it.to} to={it.to} end={it.end} className={linkClassSidebar}>{it.label}</NavLink>
+          ))}
+        </nav>
+        <div className="border-t border-gray-100 p-3 space-y-2 shrink-0">
+          <div className="px-1">
+            <CampanaNotificaciones />
+          </div>
+          <p className="text-xs text-gray-500 truncate px-1">{usuario.nombre || usuario.email} · {usuario.rol}</p>
+          <button onClick={logout} className="text-xs text-fat-bordo-600 hover:underline px-1">Salir</button>
+        </div>
+      </aside>
 
-      {menuAbierto && (
-        <div className="fixed inset-0 z-50 md:hidden">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setMenuAbierto(false)} />
-          <div className="absolute inset-y-0 left-0 w-72 max-w-[85vw] bg-white shadow-xl flex flex-col">
-            <div className="flex items-center justify-between px-4 h-14 border-b border-gray-100 shrink-0">
+      <div className="flex-1 min-w-0">
+        {/* Encabezado - solo celular: hamburguesa a la izquierda que abre el
+            panel lateral (ver más abajo), logo y campana. */}
+        <header className="md:hidden bg-white border-b border-gray-200">
+          <div className="px-4 h-14 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <button onClick={() => setMenuAbierto(true)} aria-label="Abrir menú" className="text-gray-500 hover:text-gray-700 -ml-1 p-1">
+                <svg width="22" height="22" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                  <path fillRule="evenodd" d="M3 5h14a1 1 0 100-2H3a1 1 0 000 2zm0 6h14a1 1 0 100-2H3a1 1 0 000 2zm0 6h14a1 1 0 100-2H3a1 1 0 000 2z" clipRule="evenodd" />
+                </svg>
+              </button>
               <img src="/brand/fatburger_logo.png" alt="FAT Audit" className="h-8" />
-              <button onClick={() => setMenuAbierto(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
             </div>
-            <nav className="flex-1 overflow-y-auto p-4 flex flex-col gap-1">
-              {items.map((it) => (
-                <NavLink key={it.to} to={it.to} end={it.end} className={linkClassDrawer}>{it.label}</NavLink>
-              ))}
-            </nav>
-            <div className="border-t border-gray-100 p-4 space-y-2 text-sm shrink-0">
-              <p className="text-gray-500 truncate">{usuario.nombre || usuario.email} · {usuario.rol}</p>
-              <button onClick={logout} className="text-fat-bordo-600 hover:underline">Salir</button>
+            <CampanaNotificaciones />
+          </div>
+        </header>
+
+        {menuAbierto && (
+          <div className="fixed inset-0 z-50 md:hidden">
+            <div className="absolute inset-0 bg-black/40" onClick={() => setMenuAbierto(false)} />
+            <div className="absolute inset-y-0 left-0 w-72 max-w-[85vw] bg-white shadow-xl flex flex-col">
+              <div className="flex items-center justify-between px-4 h-14 border-b border-gray-100 shrink-0">
+                <img src="/brand/fatburger_logo.png" alt="FAT Audit" className="h-8" />
+                <button onClick={() => setMenuAbierto(false)} aria-label="Cerrar menú" className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+              </div>
+              <nav className="flex-1 overflow-y-auto p-4 flex flex-col gap-1">
+                {items.map((it) => (
+                  <NavLink key={it.to} to={it.to} end={it.end} className={linkClassSidebar}>{it.label}</NavLink>
+                ))}
+              </nav>
+              <div className="border-t border-gray-100 p-4 space-y-2 text-sm shrink-0">
+                <p className="text-gray-500 truncate">{usuario.nombre || usuario.email} · {usuario.rol}</p>
+                <button onClick={logout} className="text-fat-bordo-600 hover:underline">Salir</button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      <main className="max-w-[1400px] mx-auto px-4 py-6 md:py-8">
-        <Outlet />
-      </main>
+        <main className="max-w-[1400px] mx-auto px-4 py-6 md:py-8">
+          <Outlet />
+        </main>
+      </div>
     </div>
   );
 }
