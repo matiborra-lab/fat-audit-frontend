@@ -7,6 +7,50 @@ function claveBorrador(runId) {
   return `fataudit_borrador_${runId}`;
 }
 
+// Genera una miniatura liviana (JPEG, ancho máx. 240px) en el propio
+// celular antes de subir nada - así la miniatura que se guarda es un
+// archivo chico de verdad, no el mismo original con otro nombre. Devuelve
+// null si algo falla (formato raro, etc.) - en ese caso la evidencia queda
+// sin miniatura y la UI cae al archivo original (ver HistorialDetalle).
+function generarMiniaturaImagen(file, maxAncho = 240) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const escala = Math.min(1, maxAncho / img.width);
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(img.width * escala));
+      canvas.height = Math.max(1, Math.round(img.height * escala));
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob((blob) => resolve(blob), 'image/jpeg', 0.7);
+      URL.revokeObjectURL(url);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+    img.src = url;
+  });
+}
+
+// Idem para video: toma un frame del primer instante como miniatura.
+function generarMiniaturaVideo(file, maxAncho = 240) {
+  return new Promise((resolve) => {
+    const video = document.createElement('video');
+    video.muted = true;
+    video.playsInline = true;
+    const url = URL.createObjectURL(file);
+    video.addEventListener('loadeddata', () => {
+      const escala = Math.min(1, maxAncho / video.videoWidth);
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(video.videoWidth * escala));
+      canvas.height = Math.max(1, Math.round(video.videoHeight * escala));
+      canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob((blob) => resolve(blob), 'image/jpeg', 0.7);
+      URL.revokeObjectURL(url);
+    }, { once: true });
+    video.addEventListener('error', () => { URL.revokeObjectURL(url); resolve(null); }, { once: true });
+    video.src = url;
+  });
+}
+
 // Misma logica que auth/../scoring/index.js del backend (evaluarCondicion en
 // runs.js) - reimplementada acá SOLO para dar feedback inmediato en pantalla
 // mientras se completa la auditoría. La validación real y definitiva la hace
@@ -14,8 +58,8 @@ function claveBorrador(runId) {
 function evaluarCondicion(operador, valorRespuesta, valorCondicion) {
   if (valorRespuesta == null) return false;
   switch (operador) {
-    case '=': return valorRespuesta === valorCondicion;
-    case '!=': return valorRespuesta !== valorCondicion;
+    case '=': return String(valorRespuesta) === String(valorCondicion);
+    case '!=': return String(valorRespuesta) !== String(valorCondicion);
     case '<': return Number(valorRespuesta) < Number(valorCondicion);
     case '<=': return Number(valorRespuesta) <= Number(valorCondicion);
     case '>': return Number(valorRespuesta) > Number(valorCondicion);
@@ -128,7 +172,23 @@ export default function Ejecucion() {
       const tipo = file.type.startsWith('video') ? 'VIDEO' : 'FOTO';
       const { uploadUrl, publicUrl } = await api.post(`/api/runs/${id}/evidencia/url-subida`, { content_type: file.type });
       await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
-      const evidencia = await api.post(`/api/runs/${id}/evidencia`, { item_id: item.id, tipo, url: publicUrl });
+
+      // Miniatura opcional: si falla (formato raro, canvas bloqueado, etc.)
+      // no aborta la subida - la evidencia queda sin thumbnail_url y la UI
+      // cae al archivo original.
+      let thumbnailUrl = null;
+      try {
+        const miniatura = tipo === 'FOTO' ? await generarMiniaturaImagen(file) : await generarMiniaturaVideo(file);
+        if (miniatura) {
+          const { uploadUrl: urlMini, publicUrl: publicMini } = await api.post(`/api/runs/${id}/evidencia/url-subida`, { content_type: 'image/jpeg' });
+          await fetch(urlMini, { method: 'PUT', headers: { 'Content-Type': 'image/jpeg' }, body: miniatura });
+          thumbnailUrl = publicMini;
+        }
+      } catch {
+        // sin miniatura, no es bloqueante
+      }
+
+      const evidencia = await api.post(`/api/runs/${id}/evidencia`, { item_id: item.id, tipo, url: publicUrl, thumbnail_url: thumbnailUrl });
       setEvidencias((prev) => ({ ...prev, [item.id]: [...(prev[item.id] || []), evidencia] }));
     } catch (err) {
       setError('No se pudo subir la evidencia: ' + err.message);
