@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { Tarjeta, Select, Boton, Cargando } from '../components/ui';
 
 const ROL_LABEL = { ADMIN: 'Admin', AUDITOR: 'Auditor', GERENTE: 'Gerente', COLABORADOR: 'Colaborador' };
+const TIPO_LABEL = { MARCA: 'De marca', INTERNA: 'Interna', SEGUIMIENTO: 'Seguimiento' };
 
 // Buscador de responsables PRESENTES en la auditoría (puede ser mas de
 // uno) - se arma la lista de nombres a partir de la gente de la sucursal,
@@ -79,7 +80,6 @@ export default function Ejecutar() {
   const [sucursalId, setSucursalId] = useState(usuario.rol === 'GERENTE' ? usuario.sucursal_id : '');
   const [plantillas, setPlantillas] = useState(null);
   const [templateId, setTemplateId] = useState('');
-  const [tipo, setTipo] = useState('INTERNA');
   const [responsables, setResponsables] = useState([]);
   const [error, setError] = useState('');
   const [iniciando, setIniciando] = useState(false);
@@ -101,7 +101,7 @@ export default function Ejecutar() {
     setIniciando(true);
     try {
       const responsable_nombre = responsables.map((r) => r.nombre || r.email).join(', ');
-      const run = await api.post('/api/runs', { template_id: Number(templateId), sucursal_id: Number(sucursalId), tipo, responsable_nombre });
+      const run = await api.post('/api/runs', { template_id: Number(templateId), sucursal_id: Number(sucursalId), responsable_nombre });
       navigate(`/ejecucion/${run.id}`);
     } catch (err) {
       setError(err.message);
@@ -130,10 +130,13 @@ export default function Ejecutar() {
             </Select>
           )}
 
-          <Select label="Tipo de auditoría" value={tipo} onChange={(e) => setTipo(e.target.value)}>
-            <option value="INTERNA">Interna</option>
-            <option value="MARCA">De marca</option>
-          </Select>
+          {/* El tipo (interna/marca/seguimiento) lo define la plantilla - no
+              se vuelve a pedir ni se puede contradecir acá. */}
+          {templateId && (
+            <p className="text-xs text-gray-500 -mt-2">
+              Tipo: <span className="font-medium text-gray-700">{TIPO_LABEL[plantillas.find((t) => t.id === Number(templateId))?.tipo] || '—'}</span>
+            </p>
+          )}
 
           <BuscadorResponsablesPresentes sucursalId={sucursalId} seleccionados={responsables} onChange={setResponsables} />
 

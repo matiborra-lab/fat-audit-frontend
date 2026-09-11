@@ -16,6 +16,7 @@ export default function Auditorias() {
   const [form, setForm] = useState({ nombre: '', tipo: 'INTERNA', weighting_mode: 'CON_PESO', aprobadoDesde: '' });
   const [error, setError] = useState('');
   const [guardando, setGuardando] = useState(false);
+  const [duplicandoId, setDuplicandoId] = useState(null);
 
   function recargar() {
     api.get('/api/plantillas').then(setLista);
@@ -38,6 +39,18 @@ export default function Auditorias() {
     }
   }
 
+  async function duplicar(t) {
+    setError('');
+    setDuplicandoId(t.id);
+    try {
+      const nueva = await api.post(`/api/plantillas/${t.id}/duplicar`);
+      navigate(`/auditorias/${nueva.id}`);
+    } catch (err) {
+      setError(err.message);
+      setDuplicandoId(null);
+    }
+  }
+
   if (!lista) return <Cargando />;
 
   return (
@@ -47,17 +60,26 @@ export default function Auditorias() {
         <Boton ancho="w-auto" onClick={() => setModalAbierto(true)}>+ Nueva plantilla</Boton>
       </div>
 
+      {error && <p className="text-sm text-fat-bordo-600">{error}</p>}
+
       <Tarjeta className="overflow-hidden">
         <div className="divide-y divide-gray-100">
           {lista.length === 0 && <p className="p-4 text-sm text-gray-400">Todavía no hay plantillas cargadas.</p>}
           {lista.map((t) => (
-            <Link key={t.id} to={`/auditorias/${t.id}`} className="flex items-center justify-between px-4 py-3 hover:bg-gray-50 gap-3">
-              <div className="min-w-0">
+            <div key={t.id} className="flex items-center justify-between px-4 py-3 hover:bg-gray-50 gap-3">
+              <Link to={`/auditorias/${t.id}`} className="min-w-0 flex-1">
                 <p className="text-sm font-medium text-gray-900 truncate">{t.nombre} <span className="text-gray-400 font-normal">v{t.version}</span></p>
                 <p className="text-xs text-gray-400">{t.tipo} · {t.cantidad_items} ítems</p>
-              </div>
+              </Link>
               <span className={`text-xs shrink-0 px-2.5 py-0.5 rounded-full font-medium ${ESTADO_ESTILOS[t.estado]}`}>{t.estado}</span>
-            </Link>
+              <button
+                onClick={() => duplicar(t)}
+                disabled={duplicandoId === t.id}
+                className="text-xs shrink-0 text-fat-bordo-600 hover:underline disabled:opacity-50"
+              >
+                {duplicandoId === t.id ? 'Duplicando…' : 'Duplicar'}
+              </button>
+            </div>
           ))}
         </div>
       </Tarjeta>
