@@ -8,6 +8,7 @@ import DefinirClave from './pages/DefinirClave';
 import Dashboard from './pages/Dashboard';
 import Historial from './pages/Historial';
 import HistorialDetalle from './pages/HistorialDetalle';
+import Calendario from './pages/Calendario';
 import Ejecutar from './pages/Ejecutar';
 import Ejecucion from './pages/Ejecucion';
 import Auditorias from './pages/Auditorias';
@@ -29,6 +30,7 @@ export default function App() {
               <Route path="/" element={<Dashboard />} />
               <Route path="/historial" element={<Historial />} />
               <Route path="/historial/:id" element={<HistorialDetalle />} />
+              <Route path="/calendario" element={<Calendario />} />
               <Route path="/ejecutar" element={<Ejecutar />} />
               <Route path="/ejecucion/:id" element={<Ejecucion />} />
 

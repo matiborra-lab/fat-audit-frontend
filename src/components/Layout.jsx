@@ -14,6 +14,7 @@ function itemsDeNav(rol) {
   const items = [
     { to: '/', label: 'Dashboard', end: true },
     { to: '/historial', label: 'Historial' },
+    { to: '/calendario', label: 'Calendario' },
     { to: '/ejecutar', label: 'Nueva auditoría' },
   ];
   if (rol === 'ADMIN' || rol === 'AUDITOR') {
