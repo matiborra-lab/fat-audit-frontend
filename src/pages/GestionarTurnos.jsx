@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { Tarjeta, Campo, Select, Boton, Toast, Cargando } from '../components/ui';
@@ -40,9 +41,7 @@ export default function GestionarTurnos() {
   const { usuario } = useAuth();
   const [sucursales, setSucursales] = useState([]);
   const [sucursalId, setSucursalId] = useState(usuario.rol === 'GERENTE' ? usuario.sucursal_id : '');
-  const [sucursal, setSucursal] = useState(null);
-  const [horarioForm, setHorarioForm] = useState(null);
-  const [guardandoHorario, setGuardandoHorario] = useState(false);
+  const [horarios, setHorarios] = useState(null); // Map 'dia|turno' -> {habilitado}, ver Sucursales > Horario de turnos
 
   const [vista, setVista] = useState('SEMANA'); // SEMANA | MES
   const [ancla, setAncla] = useState(new Date());
@@ -70,15 +69,10 @@ export default function GestionarTurnos() {
   }, [usuario.rol]);
 
   useEffect(() => {
-    if (!sucursalId) { setSucursal(null); return; }
-    api.get('/api/sucursales').then((lista) => {
-      const s = lista.find((x) => x.id === Number(sucursalId));
-      setSucursal(s || null);
-      if (s) setHorarioForm({
-        turno_diurno_desde: s.turno_diurno_desde.slice(0, 5), turno_diurno_hasta: s.turno_diurno_hasta.slice(0, 5),
-        turno_nocturno_desde: s.turno_nocturno_desde.slice(0, 5), turno_nocturno_hasta: s.turno_nocturno_hasta.slice(0, 5),
-      });
-    });
+    if (!sucursalId) { setHorarios(null); return; }
+    api.get(`/api/sucursales/${sucursalId}/horario-turnos`).then((rows) => {
+      setHorarios(new Map(rows.map((r) => [`${r.dia_semana}|${r.turno_tipo}`, r.habilitado])));
+    }).catch(() => setHorarios(new Map()));
   }, [sucursalId]);
 
   function recargar() {
@@ -110,21 +104,6 @@ export default function GestionarTurnos() {
     }
     return mapa;
   }, [turnos]);
-
-  async function guardarHorario(e) {
-    e.preventDefault();
-    setGuardandoHorario(true);
-    setError('');
-    try {
-      const actualizada = await api.patch(`/api/sucursales/${sucursalId}`, horarioForm);
-      setSucursal(actualizada);
-      setToast('Horario de turnos actualizado');
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setGuardandoHorario(false);
-    }
-  }
 
   function abrirAlta(fecha, turnoTipo) {
     setCeldaAbierta({ fecha, turnoTipo });
@@ -211,6 +190,17 @@ export default function GestionarTurnos() {
   function CeldaTurno({ fecha, turnoTipo }) {
     const claveFecha = aClaveDia(fecha);
     const abierta = celdaAbierta?.fecha === claveFecha && celdaAbierta?.turnoTipo === turnoTipo;
+    const habilitado = horarios?.get(`${fecha.getDay()}|${turnoTipo}`);
+
+    if (!habilitado) {
+      return (
+        <div className="border border-dashed border-gray-100 rounded-lg p-1.5 bg-gray-50/20">
+          <span className="text-[10px] font-semibold text-gray-300 uppercase">{TURNO_LABEL[turnoTipo]}</span>
+          <p className="text-[10px] text-gray-300 mt-1">No disponible</p>
+        </div>
+      );
+    }
+
     return (
       <div className="border border-gray-100 rounded-lg p-1.5 bg-gray-50/50">
         <div className="flex items-center justify-between mb-1">
@@ -275,30 +265,10 @@ export default function GestionarTurnos() {
 
       {sucursalId && (
         <>
-          {horarioForm && (
-            <Tarjeta className="p-4">
-              <h2 className="text-sm font-semibold text-gray-900 mb-2">Horario de turnos de la sucursal</h2>
-              <form onSubmit={guardarHorario} className="flex flex-wrap items-end gap-3">
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Diurno desde</label>
-                  <input type="time" className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm" value={horarioForm.turno_diurno_desde} onChange={(e) => setHorarioForm({ ...horarioForm, turno_diurno_desde: e.target.value })} />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">hasta</label>
-                  <input type="time" className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm" value={horarioForm.turno_diurno_hasta} onChange={(e) => setHorarioForm({ ...horarioForm, turno_diurno_hasta: e.target.value })} />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Nocturno desde</label>
-                  <input type="time" className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm" value={horarioForm.turno_nocturno_desde} onChange={(e) => setHorarioForm({ ...horarioForm, turno_nocturno_desde: e.target.value })} />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">hasta</label>
-                  <input type="time" className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm" value={horarioForm.turno_nocturno_hasta} onChange={(e) => setHorarioForm({ ...horarioForm, turno_nocturno_hasta: e.target.value })} />
-                </div>
-                <Boton ancho="w-auto" type="submit" cargando={guardandoHorario}>Guardar</Boton>
-              </form>
-            </Tarjeta>
-          )}
+          <p className="text-xs text-gray-400">
+            El horario y los días habilitados de cada turno se configuran desde{' '}
+            <Link to="/sucursales" className="text-fat-bordo-600 hover:underline">Sucursales</Link>.
+          </p>
 
           {solicitudes && solicitudes.length > 0 && (
             <Tarjeta className="p-4 border-yellow-200 bg-yellow-50/50">

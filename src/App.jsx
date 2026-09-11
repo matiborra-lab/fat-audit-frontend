@@ -59,7 +59,7 @@ export default function App() {
                 <Route path="/auditorias/:id" element={<AuditoriaConstructor />} />
               </Route>
 
-              <Route element={<RequireRole roles={['ADMIN']} />}>
+              <Route element={<RequireRole roles={['ADMIN', 'GERENTE']} />}>
                 <Route path="/sucursales" element={<Sucursales />} />
               </Route>
             </Route>

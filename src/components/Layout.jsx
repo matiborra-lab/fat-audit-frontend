@@ -31,7 +31,7 @@ function itemsDeNav(rol) {
     items.push({ to: '/usuarios', label: rol === 'GERENTE' ? 'Colaboradores' : 'Usuarios' });
   }
   items.push({ to: '/reportes-programados', label: 'Reportes' });
-  if (rol === 'ADMIN') {
+  if (rol === 'ADMIN' || rol === 'GERENTE') {
     items.push({ to: '/sucursales', label: 'Sucursales' });
   }
   return items;
