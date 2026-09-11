@@ -3,6 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api/client';
 import { Tarjeta, Boton, Semaforo, Resultado, Cargando } from '../components/ui';
 
+const API_URL = import.meta.env.VITE_API_URL;
+
 function valorLegible(item, valor) {
   if (valor == null) return '—';
   if (item.tipo_respuesta === 'ESCALA_5') return `${valor} / 5`;
@@ -19,6 +21,11 @@ export default function HistorialDetalle() {
   const [error, setError] = useState('');
   const [seleccionSeguimiento, setSeleccionSeguimiento] = useState(null); // null = no esta eligiendo
   const [creandoSeguimiento, setCreandoSeguimiento] = useState(false);
+  const [generandoPdf, setGenerandoPdf] = useState(false);
+  const [mostrarEnviar, setMostrarEnviar] = useState(false);
+  const [emails, setEmails] = useState('');
+  const [enviando, setEnviando] = useState(false);
+  const [enviadoOk, setEnviadoOk] = useState(false);
 
   function recargar() {
     api.get(`/api/runs/${id}`).then(setRun).catch((e) => setError(e.message));
@@ -34,6 +41,45 @@ export default function HistorialDetalle() {
   for (const e of evidencias) {
     if (!evidenciasPorRespuesta.has(e.respuesta_id)) evidenciasPorRespuesta.set(e.respuesta_id, []);
     evidenciasPorRespuesta.get(e.respuesta_id).push(e);
+  }
+
+  async function descargarPdf() {
+    setGenerandoPdf(true);
+    setError('');
+    try {
+      const token = localStorage.getItem('fataudit_token');
+      const resp = await fetch(`${API_URL}/api/runs/${id}/pdf`, { headers: { Authorization: 'Bearer ' + token } });
+      if (!resp.ok) throw new Error('No se pudo generar el PDF');
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `auditoria-${id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setGenerandoPdf(false);
+    }
+  }
+
+  async function enviarInforme() {
+    const destinatarios = emails.split(',').map((e) => e.trim()).filter(Boolean);
+    if (destinatarios.length === 0) return;
+    setEnviando(true);
+    setError('');
+    try {
+      await api.post(`/api/runs/${id}/enviar-informe`, { destinatarios });
+      setEnviadoOk(true);
+      setEmails('');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setEnviando(false);
+    }
   }
 
   async function confirmarSeguimiento() {
@@ -75,7 +121,7 @@ export default function HistorialDetalle() {
       )}
 
       {run.estado === 'COMPLETADA' && (
-        <div className="flex justify-end">
+        <div className="flex flex-wrap justify-end gap-3">
           {seleccionSeguimiento ? (
             <div className="flex items-center gap-3">
               <span className="text-sm text-gray-500">{seleccionSeguimiento.size} hallazgo(s) elegido(s)</span>
@@ -83,9 +129,32 @@ export default function HistorialDetalle() {
               <Boton ancho="w-auto" cargando={creandoSeguimiento} disabled={seleccionSeguimiento.size === 0} onClick={confirmarSeguimiento}>Crear seguimiento</Boton>
             </div>
           ) : (
-            <Boton ancho="w-auto" variante="secundario" onClick={() => setSeleccionSeguimiento(new Set())}>Crear auditoría de seguimiento</Boton>
+            <>
+              <Boton ancho="w-auto" variante="secundario" cargando={generandoPdf} onClick={descargarPdf}>Descargar PDF</Boton>
+              <Boton ancho="w-auto" variante="secundario" onClick={() => { setMostrarEnviar((v) => !v); setEnviadoOk(false); }}>Enviar por email</Boton>
+              <Boton ancho="w-auto" variante="secundario" onClick={() => setSeleccionSeguimiento(new Set())}>Crear auditoría de seguimiento</Boton>
+            </>
           )}
         </div>
+      )}
+
+      {mostrarEnviar && (
+        <Tarjeta className="p-4">
+          <p className="text-sm font-medium text-gray-900 mb-2">Enviar informe por email</p>
+          {enviadoOk ? (
+            <p className="text-sm text-green-700">Informe enviado.</p>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                className="flex-1 min-w-[220px] rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
+                placeholder="mail1@ejemplo.com, mail2@ejemplo.com"
+                value={emails}
+                onChange={(e) => setEmails(e.target.value)}
+              />
+              <Boton ancho="w-auto" cargando={enviando} disabled={!emails.trim()} onClick={enviarInforme}>Enviar</Boton>
+            </div>
+          )}
+        </Tarjeta>
       )}
 
       {estructura.sectores.map((sector) => {
