@@ -1,0 +1,55 @@
+@import "tailwindcss";
+
+/* Paleta oficial de marca FAT Burger. Los tonos base (500/600) son los
+   colores exactos que pasó el usuario; el resto de la escala se interpola
+   hacia blanco (tintes claros, para fondos/badges) y hacia negro (tintes
+   oscuros, para texto/hover) - mismo mecanismo que coteja-frontend. */
+@theme {
+  --color-fat-amarillo-50: #fefbf0;
+  --color-fat-amarillo-100: #fdf2d4;
+  --color-fat-amarillo-200: #fae4a3;
+  --color-fat-amarillo-300: #f7d772;
+  --color-fat-amarillo-400: #f7cb4e;
+  --color-fat-amarillo-500: #f7be32;
+  --color-fat-amarillo-600: #dba026;
+  --color-fat-amarillo-700: #b57e1c;
+  --color-fat-amarillo-800: #8a5f15;
+  --color-fat-amarillo-900: #5c3f0e;
+
+  --color-fat-bordo-50: #fbf0f2;
+  --color-fat-bordo-100: #f2d6dc;
+  --color-fat-bordo-200: #e0a6b3;
+  --color-fat-bordo-300: #c97186;
+  --color-fat-bordo-400: #ac3e58;
+  --color-fat-bordo-500: #86152d;
+  --color-fat-bordo-600: #711226;
+  --color-fat-bordo-700: #5a0e1e;
+  --color-fat-bordo-800: #420a16;
+  --color-fat-bordo-900: #2b060e;
+
+  --color-fat-celeste-50: #f3f7f7;
+  --color-fat-celeste-100: #dde8e9;
+  --color-fat-celeste-200: #b7d0d3;
+  --color-fat-celeste-300: #8fb3b8;
+  --color-fat-celeste-400: #6d9aa0;
+  --color-fat-celeste-500: #54818b;
+  --color-fat-celeste-600: #446a72;
+  --color-fat-celeste-700: #35535a;
+  --color-fat-celeste-800: #263c41;
+  --color-fat-celeste-900: #182629;
+
+  --color-fat-marfil: #e4e3e1;
+  --color-fat-marfil-suave: #f4f3f1;
+}
+
+html {
+  /* evita que el contenido centrado se corra al aparecer/desaparecer la
+     barra de scroll entre pantallas (mismo motivo que en coteja-frontend) */
+  scrollbar-gutter: stable;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, "Segoe UI", Roboto, sans-serif;
+  background-color: var(--color-fat-marfil-suave);
+}

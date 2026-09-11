@@ -1,0 +1,13 @@
+{
+  "name": "FAT Audit",
+  "short_name": "FAT Audit",
+  "description": "Auditorías de sucursales FAT Burger",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#E4E3E1",
+  "theme_color": "#86152D",
+  "icons": [
+    { "src": "/brand/fatburger_logo.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/brand/fatburger_logo.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}
