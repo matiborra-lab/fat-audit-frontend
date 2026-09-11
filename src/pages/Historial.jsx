@@ -5,7 +5,6 @@ import { useAuth } from '../context/AuthContext';
 import { Tarjeta, Select, Puntaje, Resultado, Cargando } from '../components/ui';
 
 const TIPOS = ['MARCA', 'INTERNA', 'SEGUIMIENTO'];
-const ESTADOS = ['EN_PROGRESO', 'COMPLETADA', 'CANCELADA'];
 
 export default function Historial() {
   const { usuario } = useAuth();
@@ -32,7 +31,7 @@ export default function Historial() {
     <div className="space-y-4">
       <h1 className="text-xl font-semibold text-gray-900">Historial</h1>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 gap-3">
         {usuario.rol !== 'GERENTE' && (
           <Select value={params.get('sucursal_id') || ''} onChange={(e) => actualizarFiltro('sucursal_id', e.target.value)}>
             <option value="">Todas las sucursales</option>
@@ -42,10 +41,6 @@ export default function Historial() {
         <Select value={params.get('tipo') || ''} onChange={(e) => actualizarFiltro('tipo', e.target.value)}>
           <option value="">Todos los tipos</option>
           {TIPOS.map((t) => <option key={t} value={t}>{t}</option>)}
-        </Select>
-        <Select value={params.get('estado') || ''} onChange={(e) => actualizarFiltro('estado', e.target.value)}>
-          <option value="">Todos los estados</option>
-          {ESTADOS.map((e) => <option key={e} value={e}>{e}</option>)}
         </Select>
       </div>
 

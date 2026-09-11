@@ -112,6 +112,26 @@ const SEMAFORO_COLOR_TEXTO = {
   DORADO: 'text-fat-amarillo-600',
 };
 
+// Mismos colores que semaforo_config (ver seed) pero en hex, para usar como
+// fill de barras en los gráficos del dashboard.
+export const SEMAFORO_HEX = {
+  ROJO: '#DC2626',
+  NARANJA: '#EA580C',
+  AMARILLO: '#CA8A04',
+  VERDE: '#16A34A',
+  DORADO: '#D4AF37',
+};
+
+// Fallback client-side para promedios que no vienen de una auditoría puntual
+// (no traen su propio semaforo) - mismos tramos que semaforo_config.
+export function semaforoDePuntaje(pct) {
+  if (pct >= 95) return 'DORADO';
+  if (pct >= 80) return 'VERDE';
+  if (pct >= 60) return 'AMARILLO';
+  if (pct >= 50) return 'NARANJA';
+  return 'ROJO';
+}
+
 // tamaño: 'sm' (listados) | 'lg' (detalle) - controla el tamaño de fuente,
 // el color sale siempre de `semaforo`.
 export function Puntaje({ valor, semaforo, tamano = 'sm', className = '' }) {
