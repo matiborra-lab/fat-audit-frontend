@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { api } from '../api/client';
-import { Tarjeta, Boton, Puntaje, Resultado, Cargando } from '../components/ui';
+import { useAuth } from '../context/AuthContext';
+import { Tarjeta, Campo, Boton, Toast, Puntaje, Resultado, Cargando } from '../components/ui';
+import BuscadorResponsable from '../components/BuscadorResponsable';
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -14,13 +16,34 @@ function valorLegible(item, valor) {
   return String(valor);
 }
 
+// El sistema propone (pre-selecciona) los items críticos o con un resultado
+// deficiente, para agilizar la elección del seguimiento - el admin/auditor
+// igual puede desmarcar o sumar cualquier otro a mano. OPCION_MULTIPLE/
+// NUMERO/TEXTO/FECHA no se auto-proponen (no hay forma genérica de saber si
+// "salió mal"), pero se pueden marcar igual.
+function esHallazgo(item, resp) {
+  if (item.critico) return true;
+  if (!resp || resp.no_aplica || resp.valor_json == null) return false;
+  const v = resp.valor_json;
+  if (item.tipo_respuesta === 'SI_NO') return !(v === 'SI' || v === true);
+  if (item.tipo_respuesta === 'CHECKBOX') return !v;
+  if (item.tipo_respuesta === 'ESCALA_5') return Number(v) <= 2;
+  if (item.tipo_respuesta === 'ESCALA_10') return Number(v) <= 5;
+  return false;
+}
+
 export default function HistorialDetalle() {
   const { id } = useParams();
-  const navigate = useNavigate();
+  const { usuario } = useAuth();
+  const puedeGenerarSeguimiento = usuario.rol === 'ADMIN' || usuario.rol === 'AUDITOR';
   const [run, setRun] = useState(null);
   const [error, setError] = useState('');
   const [seleccionSeguimiento, setSeleccionSeguimiento] = useState(null); // null = no esta eligiendo
-  const [creandoSeguimiento, setCreandoSeguimiento] = useState(false);
+  const [programandoSeguimiento, setProgramandoSeguimiento] = useState(false); // 2do paso: sucursal/responsable/fecha
+  const [formProgramar, setFormProgramar] = useState({ responsable: null, fecha: '', hora: '', notificar: true });
+  const [guardandoSeguimiento, setGuardandoSeguimiento] = useState(false);
+  const [errorSeguimiento, setErrorSeguimiento] = useState('');
+  const [toast, setToast] = useState('');
   const [generandoPdf, setGenerandoPdf] = useState(false);
   const [mostrarEnviar, setMostrarEnviar] = useState(false);
   const [emails, setEmails] = useState('');
@@ -82,15 +105,40 @@ export default function HistorialDetalle() {
     }
   }
 
-  async function confirmarSeguimiento() {
-    setCreandoSeguimiento(true);
+  function iniciarSeleccionSeguimiento() {
+    // El sistema propone los items críticos o con resultado deficiente -
+    // el admin/auditor los revisa y ajusta antes de programar.
+    const propuestos = new Set(
+      estructura.items.filter((item) => esHallazgo(item, respuestaPorItem.get(item.id))).map((i) => i.id)
+    );
+    setSeleccionSeguimiento(propuestos);
+  }
+
+  function cancelarSeguimiento() {
+    setSeleccionSeguimiento(null);
+    setProgramandoSeguimiento(false);
+    setFormProgramar({ responsable: null, fecha: '', hora: '', notificar: true });
+    setErrorSeguimiento('');
+  }
+
+  async function programarSeguimiento(e) {
+    e.preventDefault();
+    if (!formProgramar.responsable) { setErrorSeguimiento('Elegí un responsable'); return; }
+    if (!formProgramar.fecha || !formProgramar.hora) { setErrorSeguimiento('Elegí fecha y hora'); return; }
+    setErrorSeguimiento('');
+    setGuardandoSeguimiento(true);
     try {
-      const nuevo = await api.post(`/api/runs/${id}/seguimiento`, { item_ids: [...seleccionSeguimiento] });
-      navigate(`/ejecucion/${nuevo.id}`);
+      const fecha_hora = new Date(`${formProgramar.fecha}T${formProgramar.hora}:00`).toISOString();
+      await api.post(`/api/runs/${id}/seguimiento`, {
+        item_ids: [...seleccionSeguimiento], responsable_user_id: formProgramar.responsable.id,
+        fecha_hora, notificar: formProgramar.notificar,
+      });
+      cancelarSeguimiento();
+      setToast('Seguimiento programado y notificado al responsable');
     } catch (err) {
-      setError(err.message);
+      setErrorSeguimiento(err.message);
     } finally {
-      setCreandoSeguimiento(false);
+      setGuardandoSeguimiento(false);
     }
   }
 
@@ -124,20 +172,48 @@ export default function HistorialDetalle() {
 
       {run.estado === 'COMPLETADA' && (
         <div className="flex flex-wrap justify-end gap-3">
-          {seleccionSeguimiento ? (
+          {seleccionSeguimiento && !programandoSeguimiento ? (
             <div className="flex items-center gap-3">
               <span className="text-sm text-gray-500">{seleccionSeguimiento.size} hallazgo(s) elegido(s)</span>
-              <Boton ancho="w-auto" variante="secundario" onClick={() => setSeleccionSeguimiento(null)}>Cancelar</Boton>
-              <Boton ancho="w-auto" cargando={creandoSeguimiento} disabled={seleccionSeguimiento.size === 0} onClick={confirmarSeguimiento}>Crear seguimiento</Boton>
+              <Boton ancho="w-auto" variante="secundario" onClick={cancelarSeguimiento}>Cancelar</Boton>
+              <Boton ancho="w-auto" disabled={seleccionSeguimiento.size === 0} onClick={() => setProgramandoSeguimiento(true)}>Continuar</Boton>
             </div>
-          ) : (
+          ) : !seleccionSeguimiento ? (
             <>
               <Boton ancho="w-auto" variante="secundario" cargando={generandoPdf} onClick={descargarPdf}>Descargar PDF</Boton>
               <Boton ancho="w-auto" variante="secundario" onClick={() => { setMostrarEnviar((v) => !v); setEnviadoOk(false); }}>Enviar por email</Boton>
-              <Boton ancho="w-auto" variante="secundario" onClick={() => setSeleccionSeguimiento(new Set())}>Crear auditoría de seguimiento</Boton>
+              {puedeGenerarSeguimiento && run.tipo === 'MARCA' && (
+                <Boton ancho="w-auto" variante="secundario" onClick={iniciarSeleccionSeguimiento}>Generar auditoría de seguimiento</Boton>
+              )}
             </>
-          )}
+          ) : null}
         </div>
+      )}
+
+      {programandoSeguimiento && (
+        <Tarjeta className="p-4 space-y-3">
+          <p className="text-sm font-medium text-gray-900">Programar seguimiento — {seleccionSeguimiento.size} hallazgo(s)</p>
+          <p className="text-xs text-gray-400">Se crea un evento en el calendario de <strong>{run.sucursal_nombre}</strong>; la auditoría de seguimiento arranca recién cuando se inicia desde ahí en la fecha elegida.</p>
+          <form onSubmit={programarSeguimiento} className="space-y-3">
+            <BuscadorResponsable
+              sucursalId={run.sucursal_id} label="Responsable" nombreValue={formProgramar.responsable?.nombre}
+              onChange={(_id, u) => setFormProgramar({ ...formProgramar, responsable: u })}
+            />
+            <div className="grid grid-cols-2 gap-3">
+              <Campo label="Fecha" type="date" required value={formProgramar.fecha} onChange={(e) => setFormProgramar({ ...formProgramar, fecha: e.target.value })} />
+              <Campo label="Hora" type="time" required value={formProgramar.hora} onChange={(e) => setFormProgramar({ ...formProgramar, hora: e.target.value })} />
+            </div>
+            <label className="flex items-center gap-2 text-sm text-gray-600">
+              <input type="checkbox" checked={formProgramar.notificar} onChange={(e) => setFormProgramar({ ...formProgramar, notificar: e.target.checked })} />
+              Notificar al responsable ahora
+            </label>
+            {errorSeguimiento && <p className="text-sm text-fat-bordo-600">{errorSeguimiento}</p>}
+            <div className="flex gap-2">
+              <Boton ancho="w-auto" variante="secundario" onClick={() => setProgramandoSeguimiento(false)}>Volver</Boton>
+              <Boton type="submit" cargando={guardandoSeguimiento}>Programar seguimiento</Boton>
+            </div>
+          </form>
+        </Tarjeta>
       )}
 
       {mostrarEnviar && (
@@ -172,7 +248,7 @@ export default function HistorialDetalle() {
                 const marcado = seleccionSeguimiento?.has(item.id);
                 return (
                   <div key={item.id} className={`px-4 py-3 flex items-start gap-3 ${marcado ? 'bg-fat-bordo-50/40' : ''}`}>
-                    {seleccionSeguimiento && (
+                    {seleccionSeguimiento && !programandoSeguimiento && (
                       <input
                         type="checkbox"
                         className="mt-1"
@@ -210,6 +286,8 @@ export default function HistorialDetalle() {
           </Tarjeta>
         );
       })}
+
+      {toast && <Toast mensaje={toast} onCerrar={() => setToast('')} />}
     </div>
   );
 }

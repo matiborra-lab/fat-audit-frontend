@@ -152,11 +152,16 @@ export default function AuditoriaConstructor() {
   }
 
   async function guardarSucursales() {
-    await api.patch(`/api/plantillas/${id}/sucursales`, {
-      aplica_todas_sucursales: aplicaTodas,
-      sucursal_ids: [...sucursalesHabilitadas],
-    });
-    setToast('Sucursales actualizadas');
+    setError('');
+    try {
+      await api.patch(`/api/plantillas/${id}/sucursales`, {
+        aplica_todas_sucursales: aplicaTodas,
+        sucursal_ids: [...sucursalesHabilitadas],
+      });
+      setToast('Sucursales actualizadas');
+    } catch (err) {
+      setError(err.message);
+    }
   }
 
   async function guardarAprobacion() {
@@ -200,7 +205,40 @@ export default function AuditoriaConstructor() {
         {!editable && <Boton ancho="w-auto" variante="secundario" onClick={crearNuevaVersion}>Crear nueva versión para editar</Boton>}
       </div>
 
-      {!editable && <Leyenda>Esta plantilla está {plantilla.estado.toLowerCase()} y no se puede editar. Creá una nueva versión para modificarla sin afectar las auditorías ya hechas.</Leyenda>}
+      {!editable && plantilla.estado !== 'ARCHIVADA' && <Leyenda>Esta plantilla está {plantilla.estado.toLowerCase()} y su estructura no se puede editar. Creá una nueva versión para modificar ítems/sectores/áreas sin afectar las auditorías ya hechas — las sucursales habilitadas sí se pueden ajustar acá abajo.</Leyenda>}
+      {!editable && plantilla.estado === 'ARCHIVADA' && <Leyenda>Esta plantilla está archivada y no se puede editar.</Leyenda>}
+
+      {error && <p className="text-sm text-fat-bordo-600">{error}</p>}
+
+      {plantilla.estado !== 'ARCHIVADA' && (
+        <Tarjeta className="p-4">
+          <p className="font-medium text-gray-900 mb-3">Sucursales habilitadas</p>
+          <Leyenda>Se puede ajustar en cualquier momento, incluso con la plantilla publicada — no hace falta una nueva versión para sumar o sacar un punto de venta.</Leyenda>
+          <label className="flex items-center gap-2 text-sm text-gray-700 mt-3 mb-2">
+            <input type="checkbox" checked={aplicaTodas} onChange={(e) => setAplicaTodas(e.target.checked)} />
+            Todas las sucursales
+          </label>
+          {!aplicaTodas && (
+            <div className="grid grid-cols-2 gap-2 mt-2">
+              {sucursales.map((s) => (
+                <label key={s.id} className="flex items-center gap-2 text-sm text-gray-600">
+                  <input
+                    type="checkbox"
+                    checked={sucursalesHabilitadas.has(s.id)}
+                    onChange={(e) => {
+                      const nuevo = new Set(sucursalesHabilitadas);
+                      if (e.target.checked) nuevo.add(s.id); else nuevo.delete(s.id);
+                      setSucursalesHabilitadas(nuevo);
+                    }}
+                  />
+                  {s.nombre}
+                </label>
+              ))}
+            </div>
+          )}
+          <Boton ancho="w-auto" variante="secundario" className="mt-3" onClick={guardarSucursales}>Guardar sucursales</Boton>
+        </Tarjeta>
+      )}
 
       {editable && (
         <>
@@ -225,34 +263,6 @@ export default function AuditoriaConstructor() {
             </div>
           </Tarjeta>
 
-          <Tarjeta className="p-4">
-            <p className="font-medium text-gray-900 mb-3">Sucursales habilitadas</p>
-            <label className="flex items-center gap-2 text-sm text-gray-700 mb-2">
-              <input type="checkbox" checked={aplicaTodas} onChange={(e) => setAplicaTodas(e.target.checked)} />
-              Todas las sucursales
-            </label>
-            {!aplicaTodas && (
-              <div className="grid grid-cols-2 gap-2 mt-2">
-                {sucursales.map((s) => (
-                  <label key={s.id} className="flex items-center gap-2 text-sm text-gray-600">
-                    <input
-                      type="checkbox"
-                      checked={sucursalesHabilitadas.has(s.id)}
-                      onChange={(e) => {
-                        const nuevo = new Set(sucursalesHabilitadas);
-                        if (e.target.checked) nuevo.add(s.id); else nuevo.delete(s.id);
-                        setSucursalesHabilitadas(nuevo);
-                      }}
-                    />
-                    {s.nombre}
-                  </label>
-                ))}
-              </div>
-            )}
-            <Boton ancho="w-auto" variante="secundario" className="mt-3" onClick={guardarSucursales}>Guardar sucursales</Boton>
-          </Tarjeta>
-
-          {error && <p className="text-sm text-fat-bordo-600">{error}</p>}
           {erroresPeso.length > 0 && (
             <Tarjeta className="p-4 bg-fat-bordo-50/40 border-fat-bordo-200">
               <p className="text-sm font-medium text-fat-bordo-800 mb-1">No se puede guardar todavía — los pesos no cierran en 100%:</p>
