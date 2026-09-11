@@ -132,6 +132,39 @@ export function semaforoDePuntaje(pct) {
   return 'ROJO';
 }
 
+// Color consistente por área (categoría transversal del ítem: Bromatología,
+// Limpieza, Operación, etc.) - misma paleta en toda la app (ejecución de
+// auditoría, historial) para que una categoría se reconozca siempre por el
+// mismo color, tal como pide la spec. Un hash simple del nombre elige el
+// color, así una plantilla nueva con áreas nuevas no necesita tocar código.
+const PALETA_AREA = [
+  { bg: 'bg-blue-100', texto: 'text-blue-700' },
+  { bg: 'bg-emerald-100', texto: 'text-emerald-700' },
+  { bg: 'bg-purple-100', texto: 'text-purple-700' },
+  { bg: 'bg-amber-100', texto: 'text-amber-800' },
+  { bg: 'bg-pink-100', texto: 'text-pink-700' },
+  { bg: 'bg-cyan-100', texto: 'text-cyan-700' },
+  { bg: 'bg-lime-100', texto: 'text-lime-800' },
+  { bg: 'bg-indigo-100', texto: 'text-indigo-700' },
+];
+
+function hashTexto(texto) {
+  let h = 0;
+  for (let i = 0; i < texto.length; i++) h = (h * 31 + texto.charCodeAt(i)) >>> 0;
+  return h;
+}
+
+export function colorPorArea(nombre) {
+  if (!nombre) return PALETA_AREA[0];
+  return PALETA_AREA[hashTexto(nombre) % PALETA_AREA.length];
+}
+
+export function EtiquetaArea({ nombre }) {
+  if (!nombre) return null;
+  const color = colorPorArea(nombre);
+  return <span className={`inline-block text-[10px] font-medium px-1.5 py-0.5 rounded ${color.bg} ${color.texto}`}>{nombre}</span>;
+}
+
 // tamaño: 'sm' (listados) | 'lg' (detalle) - controla el tamaño de fuente,
 // el color sale siempre de `semaforo`.
 export function Puntaje({ valor, semaforo, tamano = 'sm', className = '' }) {

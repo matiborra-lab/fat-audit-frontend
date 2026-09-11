@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
-import { Tarjeta, Campo, Boton, Toast, Puntaje, Resultado, Cargando } from '../components/ui';
+import { Tarjeta, Campo, Boton, Toast, Puntaje, Resultado, Cargando, EtiquetaArea } from '../components/ui';
 import BuscadorResponsable from '../components/BuscadorResponsable';
 
 const API_URL = import.meta.env.VITE_API_URL;
@@ -264,7 +264,7 @@ export default function HistorialDetalle() {
                       <p className="text-sm text-gray-800">
                         {item.texto} {item.critico && <span className="text-xs text-fat-bordo-600 font-medium">· crítico</span>}
                       </p>
-                      <p className="text-xs text-gray-400">{item.area_id != null && estructura.areas.find((a) => a.id === item.area_id)?.nombre}</p>
+                      <div className="mt-1"><EtiquetaArea nombre={estructura.areas.find((a) => a.id === item.area_id)?.nombre} /></div>
                       {resp?.comentario && <p className="text-sm text-gray-600 mt-1">"{resp.comentario}"</p>}
                       {evidenciasItem.length > 0 && (
                         <div className="flex gap-2 mt-2">

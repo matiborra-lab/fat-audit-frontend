@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api/client';
-import { Boton, Cargando } from '../components/ui';
+import { Boton, Cargando, EtiquetaArea } from '../components/ui';
 
 function claveBorrador(runId) {
   return `fataudit_borrador_${runId}`;
@@ -82,7 +82,7 @@ export default function Ejecucion() {
   const [finalizando, setFinalizando] = useState(false);
   const [problemas, setProblemas] = useState(null);
   const [firma, setFirma] = useState('');
-  const fileInputs = useRef({});
+  const [confirmandoSalida, setConfirmandoSalida] = useState(false);
 
   useEffect(() => {
     api.get(`/api/runs/${id}`).then((data) => {
@@ -116,7 +116,16 @@ export default function Ejecucion() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [respuestas]);
 
-  if (error) return <p className="text-fat-bordo-600">{error}</p>;
+  // Si el usuario cierra la pestaña o recarga a mitad de la auditoría, el
+  // navegador pregunta antes de perder la pantalla (el borrador ya está
+  // guardado en localStorage/servidor, pero igual conviene avisar).
+  useEffect(() => {
+    function avisar(e) { e.preventDefault(); e.returnValue = ''; }
+    window.addEventListener('beforeunload', avisar);
+    return () => window.removeEventListener('beforeunload', avisar);
+  }, []);
+
+  if (error) return <p className="text-fat-bordo-600 p-4">{error}</p>;
   if (!run) return <Cargando />;
 
   const estructura = run.estructura_snapshot;
@@ -190,8 +199,10 @@ export default function Ejecucion() {
 
       const evidencia = await api.post(`/api/runs/${id}/evidencia`, { item_id: item.id, tipo, url: publicUrl, thumbnail_url: thumbnailUrl });
       setEvidencias((prev) => ({ ...prev, [item.id]: [...(prev[item.id] || []), evidencia] }));
+      return evidencia;
     } catch (err) {
       setError('No se pudo subir la evidencia: ' + err.message);
+      return null;
     } finally {
       setSubiendo(null);
     }
@@ -200,6 +211,14 @@ export default function Ejecucion() {
   async function quitarEvidencia(itemId, evidenciaId) {
     await api.del(`/api/evidencias/${evidenciaId}`);
     setEvidencias((prev) => ({ ...prev, [itemId]: prev[itemId].filter((e) => e.id !== evidenciaId) }));
+  }
+
+  // Reemplazar: sube el archivo nuevo primero y recién después borra el
+  // viejo, para que el ítem nunca quede sin evidencia en el medio (relevante
+  // si esa evidencia era la única que cumplía un requisito obligatorio).
+  async function reemplazarEvidencia(item, evidenciaVieja, file) {
+    const nueva = await subirEvidencia(item, file);
+    if (nueva) await quitarEvidencia(item.id, evidenciaVieja.id);
   }
 
   async function finalizar() {
@@ -216,59 +235,76 @@ export default function Ejecucion() {
     }
   }
 
+  function pedirSalir() {
+    setConfirmandoSalida(true);
+  }
+  function confirmarSalida() {
+    localStorage.setItem(claveBorrador(id), JSON.stringify(respuestas)); // guardar y salir - el borrador ya se guarda en cada cambio, esto es un refuerzo explícito
+    navigate(-1);
+  }
+
   return (
-    <div className="max-w-2xl mx-auto space-y-4 pb-20">
-      <div>
-        <div className="flex items-center justify-between text-sm text-gray-500 mb-1">
-          <span>{esResumen ? 'Resumen' : sectorActual.nombre}</span>
-          <span>{respondidos}/{totalItems} respondidos</span>
-        </div>
-        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-          <div className="h-full bg-fat-bordo-500 transition-all" style={{ width: `${(respondidos / totalItems) * 100}%` }} />
+    <div className="min-h-screen bg-fat-marfil-suave">
+      {/* Modo concentración: sin sidebar ni menú (esta ruta vive fuera del
+          Layout, ver App.jsx) - solo lo necesario para auditar. */}
+      <div className="sticky top-0 z-30 bg-fat-marfil-suave/95 backdrop-blur-sm border-b border-gray-200">
+        <div className="max-w-2xl mx-auto px-4 py-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <button onClick={pedirSalir} aria-label="Salir" className="text-gray-500 hover:text-gray-700 text-xl leading-none px-1 shrink-0">&times;</button>
+            <span className="text-sm font-medium text-gray-700 truncate text-center flex-1">{esResumen ? 'Resumen' : sectorActual.nombre}</span>
+            <span className="text-xs text-gray-400 shrink-0">{respondidos}/{totalItems}</span>
+          </div>
+          <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden mt-2">
+            <div className="h-full bg-fat-bordo-500 transition-all" style={{ width: `${(respondidos / totalItems) * 100}%` }} />
+          </div>
         </div>
       </div>
 
-      {!esResumen && (
-        <div className="space-y-3">
-          {itemsDelSector.map((item) => (
-            <ItemCard
-              key={item.id}
-              item={item}
-              respuesta={respuestas[item.id] || {}}
-              evidencias={evidencias[item.id] || []}
-              subiendo={subiendo === item.id}
-              onResponder={(v) => responder(item.id, v)}
-              onComentar={(c) => comentar(item.id, c)}
-              onComentarBlur={() => comentarBlur(item.id)}
-              onNoAplica={(v) => marcarNoAplica(item.id, v)}
-              onArchivo={(f) => subirEvidencia(item, f)}
-              onQuitarEvidencia={(eid) => quitarEvidencia(item.id, eid)}
-            />
-          ))}
-        </div>
-      )}
+      <div className="max-w-2xl mx-auto px-4 space-y-3 py-4 pb-24">
+        {!esResumen && (
+          <div className="space-y-3">
+            {itemsDelSector.map((item) => (
+              <ItemCard
+                key={item.id}
+                item={item}
+                areaNombre={estructura.areas.find((a) => a.id === item.area_id)?.nombre}
+                respuesta={respuestas[item.id] || {}}
+                evidencias={evidencias[item.id] || []}
+                subiendo={subiendo === item.id}
+                onResponder={(v) => responder(item.id, v)}
+                onComentar={(c) => comentar(item.id, c)}
+                onComentarBlur={() => comentarBlur(item.id)}
+                onNoAplica={(v) => marcarNoAplica(item.id, v)}
+                onArchivo={(f) => subirEvidencia(item, f)}
+                onQuitarEvidencia={(eid) => quitarEvidencia(item.id, eid)}
+                onReemplazarEvidencia={(evidenciaVieja, f) => reemplazarEvidencia(item, evidenciaVieja, f)}
+              />
+            ))}
+          </div>
+        )}
 
-      {esResumen && (
-        <div className="bg-white rounded-xl border border-gray-100 p-5 space-y-4">
-          <p className="font-medium text-gray-900">Confirmar y finalizar</p>
-          <p className="text-sm text-gray-500">{respondidos} de {totalItems} ítems respondidos.</p>
-          <input
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            placeholder="Tu nombre (firma del auditor)"
-            value={firma}
-            onChange={(e) => setFirma(e.target.value)}
-          />
-          {problemas && (
-            <div className="text-sm text-fat-bordo-600 bg-fat-bordo-50/50 rounded-lg p-3">
-              <p className="font-medium mb-1">Faltan datos para poder finalizar:</p>
-              <ul className="list-disc list-inside space-y-0.5">
-                {problemas.map((p, i) => <li key={i}>{p}</li>)}
-              </ul>
-            </div>
-          )}
-          <Boton cargando={finalizando} disabled={!firma} onClick={finalizar}>Finalizar auditoría</Boton>
-        </div>
-      )}
+        {esResumen && (
+          <div className="bg-white rounded-xl border border-gray-100 p-5 space-y-4">
+            <p className="font-medium text-gray-900">Confirmar y finalizar</p>
+            <p className="text-sm text-gray-500">{respondidos} de {totalItems} ítems respondidos.</p>
+            <input
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              placeholder="Tu nombre (firma del auditor)"
+              value={firma}
+              onChange={(e) => setFirma(e.target.value)}
+            />
+            {problemas && (
+              <div className="text-sm text-fat-bordo-600 bg-fat-bordo-50/50 rounded-lg p-3">
+                <p className="font-medium mb-1">Faltan datos para poder finalizar:</p>
+                <ul className="list-disc list-inside space-y-0.5">
+                  {problemas.map((p, i) => <li key={i}>{p}</li>)}
+                </ul>
+              </div>
+            )}
+            <Boton cargando={finalizando} disabled={!firma} onClick={finalizar}>Finalizar auditoría</Boton>
+          </div>
+        )}
+      </div>
 
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-3 flex justify-center gap-3">
         <div className="w-full max-w-2xl flex justify-between gap-3">
@@ -276,23 +312,61 @@ export default function Ejecucion() {
           {!esResumen && <Boton ancho="w-auto" onClick={() => setPaso((p) => p + 1)}>Guardar y seguir</Boton>}
         </div>
       </div>
+
+      {confirmandoSalida && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50" onClick={() => setConfirmandoSalida(false)}>
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-5" onClick={(e) => e.stopPropagation()}>
+            <p className="font-medium text-gray-900 mb-2">¿Salir de la auditoría?</p>
+            <p className="text-sm text-gray-500 mb-4">Tu avance se guardó como borrador — al volver, vas a retomar desde donde lo dejaste.</p>
+            <div className="flex gap-2">
+              <Boton ancho="w-auto" variante="secundario" onClick={() => setConfirmandoSalida(false)}>Seguir auditando</Boton>
+              <Boton ancho="w-auto" onClick={confirmarSalida}>Guardar y salir</Boton>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function ItemCard({ item, respuesta, evidencias, subiendo, onResponder, onComentar, onComentarBlur, onNoAplica, onArchivo, onQuitarEvidencia }) {
+function ItemCard({ item, areaNombre, respuesta, evidencias, subiendo, onResponder, onComentar, onComentarBlur, onNoAplica, onArchivo, onQuitarEvidencia, onReemplazarEvidencia }) {
   const reglaDisparada = (item.reglas || []).find((r) => evaluarCondicion(r.condicion_json.operador, respuesta.valor_json, r.condicion_json.valor));
   const acciones = reglaDisparada?.acciones_json;
-  const faltaFoto = acciones?.foto_obligatoria && !evidencias.some((e) => e.tipo === 'FOTO');
-  const faltaVideo = acciones?.video_obligatoria && !evidencias.some((e) => e.tipo === 'VIDEO');
+  const requiereFoto = item.evidencia_requerida === 'FOTO' || !!acciones?.foto_obligatoria;
+  const requiereVideo = item.evidencia_requerida === 'VIDEO' || !!acciones?.video_obligatoria;
+  const requiereFotoOVideo = item.evidencia_requerida === 'FOTO_O_VIDEO';
+  const fotos = evidencias.filter((e) => e.tipo === 'FOTO');
+  const videos = evidencias.filter((e) => e.tipo === 'VIDEO');
+  const faltaFoto = requiereFoto && fotos.length === 0;
+  const faltaVideo = requiereVideo && videos.length === 0;
+  const faltaFotoOVideo = requiereFotoOVideo && fotos.length === 0 && videos.length === 0;
   const faltaComentario = acciones?.comentario_obligatorio && !respuesta.comentario;
+
+  // Se puede sacar una evidencia solo si no es la única que cumple un
+  // requisito obligatorio - si no, hay que "reemplazarla" en vez de borrarla
+  // sin más (spec: "siempre que la foto no sea obligatoria o exista otra
+  // evidencia válida").
+  function puedeQuitar(e) {
+    if (e.tipo === 'FOTO') {
+      if (requiereFoto && fotos.length <= 1) return false;
+      if (requiereFotoOVideo && fotos.length <= 1 && videos.length === 0) return false;
+    }
+    if (e.tipo === 'VIDEO') {
+      if (requiereVideo && videos.length <= 1) return false;
+      if (requiereFotoOVideo && videos.length <= 1 && fotos.length === 0) return false;
+    }
+    return true;
+  }
 
   return (
     <div className={`bg-white rounded-xl border p-4 space-y-3 ${respuesta.no_aplica ? 'opacity-50' : 'border-gray-100'}`}>
       <div className="flex items-start justify-between gap-2">
-        <p className="text-sm text-gray-800 flex-1">
-          {item.texto} {item.critico && <span className="text-xs text-fat-bordo-600 font-medium">· crítico</span>}
-        </p>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm text-gray-800">
+            {item.texto} {item.critico && <span className="text-xs text-fat-bordo-600 font-medium">· crítico</span>}
+          </p>
+          <div className="mt-1"><EtiquetaArea nombre={areaNombre} /></div>
+        </div>
         {item.permite_no_aplica && (
           <label className="flex items-center gap-1 text-xs text-gray-400 shrink-0">
             <input type="checkbox" checked={!!respuesta.no_aplica} onChange={(e) => onNoAplica(e.target.checked)} /> No aplica
@@ -305,42 +379,74 @@ function ItemCard({ item, respuesta, evidencias, subiendo, onResponder, onComent
 
       {!respuesta.no_aplica && (
         <>
-          <textarea
-            className={`w-full text-sm rounded-lg border px-3 py-1.5 ${faltaComentario ? 'border-fat-bordo-400' : 'border-gray-200'}`}
-            rows={faltaComentario || respuesta.comentario ? 2 : 1}
-            placeholder={faltaComentario ? 'Comentario obligatorio' : 'Comentario (opcional)'}
-            value={respuesta.comentario || ''}
-            onChange={(e) => onComentar(e.target.value)}
-            onBlur={onComentarBlur}
-          />
+          <div className="flex items-start gap-2">
+            <textarea
+              className={`flex-1 text-sm rounded-lg border px-3 py-1.5 ${faltaComentario ? 'border-fat-bordo-400' : 'border-gray-200'}`}
+              rows={faltaComentario || respuesta.comentario ? 2 : 1}
+              placeholder={faltaComentario ? 'Comentario obligatorio' : 'Comentario (opcional)'}
+              value={respuesta.comentario || ''}
+              onChange={(e) => onComentar(e.target.value)}
+              onBlur={onComentarBlur}
+            />
+            {/* La cámara para foto opcional está siempre disponible al lado
+                del comentario, exija o no evidencia el ítem - si una regla
+                la vuelve obligatoria, este mismo botón pasa a resaltarse en
+                vez de agregar uno nuevo (una foto ya cargada alcanza). */}
+            <BotonEvidencia label="" accept="image/*" capture="environment" onArchivo={onArchivo} resaltado={faltaFoto || faltaFotoOVideo} disabled={subiendo} icono />
+          </div>
 
-          {item.evidencia_requerida !== 'NINGUNA' || acciones?.foto_obligatoria || acciones?.video_obligatoria ? (
+          {(requiereVideo || (requiereFotoOVideo && fotos.length === 0)) && (
             <div className="flex flex-wrap items-center gap-2">
-              {(item.evidencia_requerida === 'FOTO' || item.evidencia_requerida === 'FOTO_O_VIDEO' || acciones?.foto_obligatoria) && (
-                <BotonEvidencia label={subiendo ? 'Subiendo…' : 'Foto'} accept="image/*" capture="environment" onArchivo={onArchivo} resaltado={faltaFoto} disabled={subiendo} />
-              )}
-              {(item.evidencia_requerida === 'VIDEO' || item.evidencia_requerida === 'FOTO_O_VIDEO' || acciones?.video_obligatoria) && (
-                <BotonEvidencia label={subiendo ? 'Subiendo…' : 'Video'} accept="video/*" capture="environment" onArchivo={onArchivo} resaltado={faltaVideo} disabled={subiendo} />
-              )}
+              <BotonEvidencia label={subiendo ? 'Subiendo…' : 'Video'} accept="video/*" capture="environment" onArchivo={onArchivo} resaltado={faltaVideo || faltaFotoOVideo} disabled={subiendo} />
+            </div>
+          )}
+
+          {evidencias.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
               {evidencias.map((e) => (
-                <div key={e.id} className="relative">
-                  {e.tipo === 'FOTO' ? (
-                    <img src={e.url} alt="evidencia" className="w-12 h-12 object-cover rounded-lg border border-gray-200" />
-                  ) : (
-                    <video src={e.url} className="w-12 h-12 object-cover rounded-lg border border-gray-200" />
-                  )}
-                  <button onClick={() => onQuitarEvidencia(e.id)} className="absolute -top-1.5 -right-1.5 bg-white border border-gray-300 rounded-full w-4 h-4 text-[10px] leading-none text-gray-500">×</button>
-                </div>
+                <MiniaturaEvidencia
+                  key={e.id}
+                  evidencia={e}
+                  puedeQuitar={puedeQuitar(e)}
+                  onQuitar={() => onQuitarEvidencia(e.id)}
+                  onReemplazar={(f) => onReemplazarEvidencia(e, f)}
+                />
               ))}
             </div>
-          ) : null}
+          )}
         </>
       )}
     </div>
   );
 }
 
-function BotonEvidencia({ label, accept, capture, onArchivo, resaltado, disabled }) {
+function MiniaturaEvidencia({ evidencia, puedeQuitar, onQuitar, onReemplazar }) {
+  const ref = useRef(null);
+  return (
+    <div className="relative">
+      <button type="button" onClick={() => ref.current?.click()} title="Reemplazar" className="block">
+        {evidencia.tipo === 'FOTO' ? (
+          <img src={evidencia.thumbnail_url || evidencia.url} alt="evidencia" className="w-14 h-14 object-cover rounded-lg border border-gray-200" />
+        ) : (
+          <video src={evidencia.url} className="w-14 h-14 object-cover rounded-lg border border-gray-200" />
+        )}
+      </button>
+      <input
+        ref={ref}
+        type="file"
+        accept={evidencia.tipo === 'FOTO' ? 'image/*' : 'video/*'}
+        capture="environment"
+        className="hidden"
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) onReemplazar(f); e.target.value = ''; }}
+      />
+      {puedeQuitar && (
+        <button onClick={onQuitar} title="Eliminar" className="absolute -top-1.5 -right-1.5 bg-white border border-gray-300 rounded-full w-4 h-4 text-[10px] leading-none text-gray-500">×</button>
+      )}
+    </div>
+  );
+}
+
+function BotonEvidencia({ label, accept, capture, onArchivo, resaltado, disabled, icono }) {
   const ref = useRef(null);
   return (
     <>
@@ -348,9 +454,10 @@ function BotonEvidencia({ label, accept, capture, onArchivo, resaltado, disabled
         type="button"
         disabled={disabled}
         onClick={() => ref.current?.click()}
-        className={`text-xs px-2.5 py-1.5 rounded-lg border ${resaltado ? 'border-fat-bordo-400 text-fat-bordo-600' : 'border-gray-300 text-gray-600'} disabled:opacity-50`}
+        title="Adjuntar foto"
+        className={`shrink-0 text-xs px-2.5 rounded-lg border ${icono ? 'py-1.5' : 'py-1.5'} ${resaltado ? 'border-fat-bordo-400 text-fat-bordo-600 bg-fat-bordo-50/50' : 'border-gray-300 text-gray-500'} disabled:opacity-50`}
       >
-        📷 {label}
+        📷{label ? ` ${label}` : ''}
       </button>
       <input
         ref={ref}

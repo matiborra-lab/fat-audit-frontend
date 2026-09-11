@@ -37,6 +37,14 @@ export default function App() {
           <Route path="/definir-clave" element={<DefinirClave />} />
 
           <Route element={<RequireAuth />}>
+            {/* Fuera del Layout a propósito: "modo concentración" (sin
+                sidebar ni menú) mientras se ejecuta una auditoría - ver
+                doc V2, Experiencia móvil. Ejecucion.jsx arma su propio
+                encabezado mínimo. */}
+            <Route element={<RequireRole roles={['ADMIN', 'AUDITOR', 'GERENTE']} />}>
+              <Route path="/ejecucion/:id" element={<Ejecucion />} />
+            </Route>
+
             <Route element={<Layout />}>
               <Route path="/" element={<Inicio />} />
               <Route path="/calendario" element={<Calendario />} />
@@ -45,7 +53,6 @@ export default function App() {
                 <Route path="/historial" element={<Historial />} />
                 <Route path="/historial/:id" element={<HistorialDetalle />} />
                 <Route path="/ejecutar" element={<Ejecutar />} />
-                <Route path="/ejecucion/:id" element={<Ejecucion />} />
                 <Route path="/reportes-programados" element={<ReportesProgramados />} />
               </Route>
 
