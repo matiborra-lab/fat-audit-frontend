@@ -30,6 +30,7 @@ function itemsDeNav(rol) {
     items.push({ to: '/turnos', label: 'Turnos' });
     items.push({ to: '/usuarios', label: rol === 'GERENTE' ? 'Colaboradores' : 'Usuarios' });
   }
+  items.push({ to: '/reportes-programados', label: 'Reportes' });
   if (rol === 'ADMIN') {
     items.push({ to: '/sucursales', label: 'Sucursales' });
   }

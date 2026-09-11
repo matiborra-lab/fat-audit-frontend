@@ -17,6 +17,7 @@ import Auditorias from './pages/Auditorias';
 import AuditoriaConstructor from './pages/AuditoriaConstructor';
 import Sucursales from './pages/Sucursales';
 import Usuarios from './pages/Usuarios';
+import ReportesProgramados from './pages/ReportesProgramados';
 
 // Un Colaborador no tiene dashboard - su pantalla inicial es el calendario
 // (donde ve sus turnos y tareas asignadas).
@@ -45,6 +46,7 @@ export default function App() {
                 <Route path="/historial/:id" element={<HistorialDetalle />} />
                 <Route path="/ejecutar" element={<Ejecutar />} />
                 <Route path="/ejecucion/:id" element={<Ejecucion />} />
+                <Route path="/reportes-programados" element={<ReportesProgramados />} />
               </Route>
 
               <Route element={<RequireRole roles={['ADMIN', 'GERENTE']} />}>
