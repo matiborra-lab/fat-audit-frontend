@@ -3,6 +3,7 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../api/client';
 import { soportaPush, suscripcionActual, activarPush, desactivarPush } from '../utils/push';
+import InstalarApp from './InstalarApp';
 
 // Misma apariencia en la barra lateral de escritorio y en el panel de
 // celular - ambas son listas verticales, a diferencia del viejo menú
@@ -148,8 +149,9 @@ export default function Layout() {
           ))}
         </nav>
         <div className="border-t border-gray-100 p-3 space-y-2 shrink-0">
-          <div className="px-1">
+          <div className="flex items-center gap-1 px-1">
             <CampanaNotificaciones />
+            <InstalarApp />
           </div>
           <p className="text-xs text-gray-500 truncate px-1">{usuario.nombre || usuario.email} · {usuario.rol}</p>
           <button onClick={logout} className="text-xs text-fat-bordo-600 hover:underline px-1">Salir</button>
@@ -169,7 +171,10 @@ export default function Layout() {
               </button>
               <img src="/brand/fatburger_logo.png" alt="FAT Audit" className="h-8" />
             </div>
-            <CampanaNotificaciones />
+            <div className="flex items-center gap-1">
+              <CampanaNotificaciones />
+              <InstalarApp />
+            </div>
           </div>
         </header>
 
