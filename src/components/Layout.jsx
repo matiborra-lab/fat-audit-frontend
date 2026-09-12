@@ -14,9 +14,14 @@ const linkClassSidebar = ({ isActive }) =>
 
 function itemsDeNav(rol) {
   // Un Colaborador solo ve su calendario y sus tareas - nada de dashboard,
-  // historial ni gestión.
+  // historial ni gestión - pero sí sus preferencias de notificación
+  // (personales, no requieren permisos de gestión).
   if (rol === 'COLABORADOR') {
-    return [{ to: '/calendario', label: 'Calendario' }, { to: '/tareas', label: 'Tareas' }];
+    return [
+      { to: '/calendario', label: 'Calendario' },
+      { to: '/tareas', label: 'Tareas' },
+      { label: 'Configuración', children: [{ to: '/configuracion/notificaciones', label: 'Notificaciones' }] },
+    ];
   }
 
   const items = [
@@ -34,12 +39,17 @@ function itemsDeNav(rol) {
     items.push({ to: '/turnos', label: 'Turnos' });
   }
   items.push({ to: '/tareas', label: 'Tareas' });
+  // Sucursales/Usuarios/Tareas solo para quien gestiona (Admin/Gerente);
+  // Notificaciones (preferencias personales) para cualquiera que llegue
+  // hasta acá (incluido Auditor, que no tiene el resto de Configuración).
+  const hijosConfig = [];
   if (rol === 'ADMIN' || rol === 'GERENTE') {
-    const hijosConfig = [{ to: '/configuracion/sucursales', label: 'Sucursales' }];
+    hijosConfig.push({ to: '/configuracion/sucursales', label: 'Sucursales' });
     hijosConfig.push({ to: '/configuracion/usuarios', label: rol === 'GERENTE' ? 'Colaboradores' : 'Usuarios' });
     if (rol === 'ADMIN') hijosConfig.push({ to: '/configuracion/tareas', label: 'Tareas' });
-    items.push({ label: 'Configuración', children: hijosConfig });
   }
+  hijosConfig.push({ to: '/configuracion/notificaciones', label: 'Notificaciones' });
+  items.push({ label: 'Configuración', children: hijosConfig });
   return items;
 }
 

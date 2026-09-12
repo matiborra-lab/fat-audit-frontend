@@ -49,6 +49,11 @@ export default function App() {
               <Route path="/" element={<Inicio />} />
               <Route path="/calendario" element={<Calendario />} />
               <Route path="/tareas" element={<Tareas />} />
+              {/* Sin gate de rol: Configuracion.jsx arma sus propias pestañas
+                  según el rol - "Notificaciones" (preferencias personales)
+                  es la única que ven Auditor/Colaborador. */}
+              <Route path="/configuracion" element={<Configuracion />} />
+              <Route path="/configuracion/:tab" element={<Configuracion />} />
 
               <Route element={<RequireRole roles={['ADMIN', 'AUDITOR', 'GERENTE']} />}>
                 <Route path="/historial" element={<Historial />} />
@@ -59,8 +64,6 @@ export default function App() {
 
               <Route element={<RequireRole roles={['ADMIN', 'GERENTE']} />}>
                 <Route path="/turnos" element={<GestionarTurnos />} />
-                <Route path="/configuracion" element={<Configuracion />} />
-                <Route path="/configuracion/:tab" element={<Configuracion />} />
               </Route>
 
               <Route element={<RequireRole roles={['ADMIN', 'AUDITOR']} />}>

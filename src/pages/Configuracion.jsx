@@ -3,21 +3,25 @@ import { useAuth } from '../context/AuthContext';
 import Sucursales from './Sucursales';
 import Usuarios from './Usuarios';
 import TareasCatalogo from './TareasCatalogo';
+import NotificacionPreferencias from './NotificacionPreferencias';
 
-// Pantalla que agrupa Sucursales, Usuarios y (solo Admin) el catálogo de
-// tareas en pestañas - ver plan Calendario v2/v3. Reusa esos componentes tal
-// cual, no están acoplados a su ruta anterior. La pestaña activa vive en la
-// URL (/configuracion/:tab) para que el desplegable "Configuración" del
-// menú pueda linkear directo a cada una.
+// Pantalla que agrupa Sucursales, Usuarios, el catálogo de tareas (solo
+// Admin) y Notificaciones (cualquier rol - preferencias personales) en
+// pestañas - ver plan Calendario v2/v3. Reusa esos componentes tal cual, no
+// están acoplados a su ruta anterior. La pestaña activa vive en la URL
+// (/configuracion/:tab) para que el desplegable "Configuración" del menú
+// pueda linkear directo a cada una.
 export default function Configuracion() {
   const { usuario } = useAuth();
   const { tab } = useParams();
   const navigate = useNavigate();
-  const tabs = [
-    { key: 'sucursales', label: 'Sucursales', el: <Sucursales /> },
-    { key: 'usuarios', label: usuario.rol === 'GERENTE' ? 'Colaboradores' : 'Usuarios', el: <Usuarios /> },
-  ];
-  if (usuario.rol === 'ADMIN') tabs.push({ key: 'tareas', label: 'Tareas', el: <TareasCatalogo /> });
+  const tabs = [];
+  if (usuario.rol === 'ADMIN' || usuario.rol === 'GERENTE') {
+    tabs.push({ key: 'sucursales', label: 'Sucursales', el: <Sucursales /> });
+    tabs.push({ key: 'usuarios', label: usuario.rol === 'GERENTE' ? 'Colaboradores' : 'Usuarios', el: <Usuarios /> });
+    if (usuario.rol === 'ADMIN') tabs.push({ key: 'tareas', label: 'Tareas', el: <TareasCatalogo /> });
+  }
+  tabs.push({ key: 'notificaciones', label: 'Notificaciones', el: <NotificacionPreferencias /> });
   const tabActiva = tabs.find((t) => t.key === tab) ? tab : tabs[0].key;
 
   return (
