@@ -14,13 +14,16 @@ const TIPO_COLOR = {
   SEGUIMIENTO: 'bg-orange-100 text-orange-700',
   TAREA: 'bg-fat-amarillo-100 text-fat-amarillo-800',
   TURNO: 'bg-purple-100 text-purple-700',
+  // Feriados/promos - estilo distintivo (pulso) para que resalte del resto.
+  EVENTO_ESPECIAL: 'bg-pink-100 text-pink-700 animate-pulse',
 };
-const TIPO_LABEL = { AUDITORIA: 'Auditoría de marca', AUDITORIA_INTERNA: 'Auditoría interna', SEGUIMIENTO: 'Seguimiento', TAREA: 'Tarea', TURNO: 'Turno' };
+const TIPO_LABEL = { AUDITORIA: 'Auditoría de marca', AUDITORIA_INTERNA: 'Auditoría interna', SEGUIMIENTO: 'Seguimiento', TAREA: 'Tarea', TURNO: 'Turno', EVENTO_ESPECIAL: 'Evento especial' };
 const TIPOS_FILTRO = [
   { valor: 'AUDITORIA', label: 'Auditoría' },
   { valor: 'SEGUIMIENTO', label: 'Seguimiento' },
   { valor: 'TAREA', label: 'Tarea' },
   { valor: 'TURNO', label: 'Turno' },
+  { valor: 'EVENTO_ESPECIAL', label: 'Evento especial' },
 ];
 const MOTIVOS_PRESET = ['Baja por malestar', 'Problemas personales', 'Evento especial'];
 // Lun..Dom en la UI -> Date#getDay() (0=domingo..6=sábado), igual que el resto de la app (ver GestionarTurnos).
@@ -475,11 +478,13 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, onClose, onCreado }
   const esGerente = usuario.rol === 'GERENTE';
   const [form, setForm] = useState({
     sucursal_id: esGerente ? usuario.sucursal_id : '',
-    tipo: 'AUDITORIA', template_id: '', titulo: '', responsable_user_id: '', responsable_nombre: '', fecha: '', hora: '10:00',
+    tipo: 'AUDITORIA', template_id: '', titulo: '', descripcion: '', responsable_user_id: '', responsable_nombre: '', fecha: '', hora: '10:00',
     recurrenciaTipo: 'NINGUNA', recurrenciaHasta: '',
     // Específico de TAREA:
     tareaModo: 'CATALOGO', tipoTareaId: '', tareaCatalogoId: '', tituloOtro: '', fotoRequerida: false,
     tareaRecurrencia: 'NINGUNA', diasSemana: [], diasMes: [], sinHora: false, fechaHasta: '',
+    // Específico de EVENTO_ESPECIAL:
+    todasSucursales: false,
   });
   const [tiposTarea, setTiposTarea] = useState([]);
   const [guardando, setGuardando] = useState(false);
@@ -500,7 +505,20 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, onClose, onCreado }
     setError('');
     setGuardando(true);
     try {
-      if (form.tipo === 'TAREA' && form.tareaRecurrencia !== 'NINGUNA') {
+      if (form.tipo === 'EVENTO_ESPECIAL') {
+        if (!form.titulo) throw new Error('Falta el título');
+        if (!form.todasSucursales && !form.sucursal_id) throw new Error('Elegí una sucursal o "Todas las sucursales"');
+        if (!form.fecha) throw new Error('Elegí una fecha');
+        await api.post('/api/calendario', {
+          tipo: 'EVENTO_ESPECIAL',
+          todas_sucursales: form.todasSucursales,
+          sucursal_id: form.todasSucursales ? null : Number(form.sucursal_id),
+          titulo: form.titulo,
+          descripcion: form.descripcion || null,
+          responsable_user_id: form.responsable_user_id || null,
+          fecha_hora: `${form.fecha}T${form.hora}:00`,
+        });
+      } else if (form.tipo === 'TAREA' && form.tareaRecurrencia !== 'NINGUNA') {
         if (form.tareaRecurrencia === 'SEMANAL' && !form.diasSemana.length) throw new Error('Elegí al menos un día de la semana');
         if (form.tareaRecurrencia === 'MENSUAL' && !form.diasMes.length) throw new Error('Elegí al menos un día del mes');
         if (!form.fecha) throw new Error('Elegí una fecha de inicio');
@@ -546,21 +564,46 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, onClose, onCreado }
           <option value="AUDITORIA">Auditoría{esGerente ? ' interna' : ''}</option>
           {!esGerente && <option value="SEGUIMIENTO">Seguimiento</option>}
           <option value="TAREA">Tarea rutinaria</option>
+          {!esGerente && <option value="EVENTO_ESPECIAL">Evento especial</option>}
         </Select>
 
-        {!esGerente && (
+        {!esGerente && form.tipo !== 'EVENTO_ESPECIAL' && (
           <Select label="Sucursal" required value={form.sucursal_id} onChange={(e) => setForm({ ...form, sucursal_id: e.target.value })}>
             <option value="">Elegí una sucursal</option>
             {sucursales.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
           </Select>
         )}
 
-        {form.tipo === 'AUDITORIA' || form.tipo === 'SEGUIMIENTO' ? (
+        {form.tipo === 'EVENTO_ESPECIAL' && (
+          <div className="space-y-2">
+            <label className="flex items-center gap-2 text-sm text-gray-700">
+              <input type="checkbox" checked={form.todasSucursales} onChange={(e) => setForm({ ...form, todasSucursales: e.target.checked, sucursal_id: '' })} />
+              Todas las sucursales
+            </label>
+            {!form.todasSucursales && (
+              <Select label="Sucursal" required value={form.sucursal_id} onChange={(e) => setForm({ ...form, sucursal_id: e.target.value })}>
+                <option value="">Elegí una sucursal</option>
+                {sucursales.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+              </Select>
+            )}
+          </div>
+        )}
+
+        {(form.tipo === 'AUDITORIA' || form.tipo === 'SEGUIMIENTO') && (
           <Select label="Plantilla" required value={form.template_id} onChange={(e) => setForm({ ...form, template_id: e.target.value })}>
             <option value="">Elegí una plantilla</option>
             {plantillas.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
           </Select>
-        ) : (
+        )}
+
+        {form.tipo === 'EVENTO_ESPECIAL' && (
+          <>
+            <Campo label="Título" required value={form.titulo} onChange={(e) => setForm({ ...form, titulo: e.target.value })} />
+            <Campo label="Descripción (opcional)" value={form.descripcion} onChange={(e) => setForm({ ...form, descripcion: e.target.value })} />
+          </>
+        )}
+
+        {form.tipo === 'TAREA' && (
           <div className="space-y-3 border border-gray-100 rounded-lg p-3">
             <div className="flex rounded-lg border border-gray-300 overflow-hidden text-sm w-fit">
               <button type="button" onClick={() => setForm({ ...form, tareaModo: 'CATALOGO' })} className={`px-3 py-1 ${form.tareaModo === 'CATALOGO' ? 'bg-fat-bordo-500 text-white' : 'bg-white text-gray-600'}`}>Del catálogo</button>
@@ -594,7 +637,9 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, onClose, onCreado }
 
         <BuscadorResponsable
           sucursalId={sucursalId}
+          todasLasSucursales={form.tipo === 'EVENTO_ESPECIAL' && form.todasSucursales}
           nombreValue={form.responsable_nombre}
+          label={form.tipo === 'EVENTO_ESPECIAL' ? 'Responsable (opcional)' : 'Responsable'}
           onChange={(id, u) => setForm({ ...form, responsable_user_id: id, responsable_nombre: u ? (u.nombre || u.email) : '' })}
         />
 
@@ -631,6 +676,11 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, onClose, onCreado }
               Sin horario, solo el día (vence al terminar el día)
             </label>
             {!form.sinHora && <Campo label="Hora" type="time" required value={form.hora} onChange={(e) => setForm({ ...form, hora: e.target.value })} />}
+          </div>
+        ) : form.tipo === 'EVENTO_ESPECIAL' ? (
+          <div className="grid grid-cols-2 gap-3">
+            <Campo label="Fecha" type="date" required value={form.fecha} onChange={(e) => setForm({ ...form, fecha: e.target.value })} />
+            <Campo label="Hora" type="time" required value={form.hora} onChange={(e) => setForm({ ...form, hora: e.target.value })} />
           </div>
         ) : (
           <>

@@ -6,25 +6,26 @@ const ROL_LABEL = { ADMIN: 'Admin', AUDITOR: 'Auditor', GERENTE: 'Gerente', COLA
 // Buscador de responsables: lista gente de la sucursal (Gerente +
 // Colaboradores) mas Admin/Auditor - usado en el constructor de eventos del
 // calendario y al ejecutar una auditoría, en vez de un campo de texto libre.
-export default function BuscadorResponsable({ sucursalId, value, nombreValue, onChange, label = 'Responsable', required = false }) {
+export default function BuscadorResponsable({ sucursalId, todasLasSucursales = false, value, nombreValue, onChange, label = 'Responsable', required = false }) {
   const [texto, setTexto] = useState(nombreValue || '');
   const [opciones, setOpciones] = useState([]);
   const [abierto, setAbierto] = useState(false);
   const contenedorRef = useRef(null);
+  const puedeBuscar = todasLasSucursales || !!sucursalId;
 
   useEffect(() => {
     setTexto(nombreValue || '');
   }, [nombreValue]);
 
   useEffect(() => {
-    if (!sucursalId) { setOpciones([]); return; }
+    if (!puedeBuscar) { setOpciones([]); return; }
     const id = setTimeout(() => {
-      const params = new URLSearchParams({ sucursal_id: sucursalId });
+      const params = new URLSearchParams(todasLasSucursales ? { todas: 'true' } : { sucursal_id: sucursalId });
       if (texto) params.set('q', texto);
       api.get(`/api/usuarios/buscar?${params}`).then(setOpciones).catch(() => setOpciones([]));
     }, 250);
     return () => clearTimeout(id);
-  }, [texto, sucursalId]);
+  }, [texto, sucursalId, todasLasSucursales]);
 
   useEffect(() => {
     function alClickAfuera(e) {
@@ -45,8 +46,8 @@ export default function BuscadorResponsable({ sucursalId, value, nombreValue, on
       {label && <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>}
       <input
         className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-fat-bordo-400"
-        placeholder={sucursalId ? 'Buscar por nombre o email…' : 'Elegí primero una sucursal'}
-        disabled={!sucursalId}
+        placeholder={puedeBuscar ? 'Buscar por nombre o email…' : 'Elegí primero una sucursal'}
+        disabled={!puedeBuscar}
         required={required}
         value={texto}
         onChange={(e) => { setTexto(e.target.value); setAbierto(true); if (value) onChange('', null); }}
@@ -63,7 +64,7 @@ export default function BuscadorResponsable({ sucursalId, value, nombreValue, on
             >
               <span className="font-medium text-gray-900">{u.nombre || u.email}</span>
               <span className="text-xs text-gray-400 ml-1.5">
-                {ROL_LABEL[u.rol]}{u.puesto ? ` · ${u.puesto}` : ''}
+                {ROL_LABEL[u.rol]}{u.puesto ? ` · ${u.puesto}` : ''}{u.sucursal_nombre ? ` · ${u.sucursal_nombre}` : ''}
               </span>
             </button>
           ))}
