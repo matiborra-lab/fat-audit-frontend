@@ -30,8 +30,8 @@ export default function Login() {
       {/* Único recurso visual del login - sin texto ni rectángulo blanco detrás.
           Se superpone al recuadro (margen negativo + z-index) para que el
           personaje salga desde ahí, en vez de flotar separado arriba. */}
-      <img src="/brand/login-audit-fat.png" alt="FAT Audit" className="relative z-10 w-48 sm:w-56 h-auto -mb-16 sm:-mb-20 drop-shadow-lg pointer-events-none" />
-      <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl p-8 pt-20 sm:pt-24">
+      <img src="/brand/login-audit-fat.png" alt="FAT Audit" className="relative z-10 w-56 sm:w-64 h-auto -mb-32 sm:-mb-36 drop-shadow-lg pointer-events-none" />
+      <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl p-8 pt-32 sm:pt-36">
         <form onSubmit={onSubmit} className="space-y-4">
           <Campo label="Usuario o email" type="text" required value={identificador} onChange={(e) => setIdentificador(e.target.value)} autoFocus />
           <Campo label="Contraseña" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
