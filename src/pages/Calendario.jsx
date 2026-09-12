@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
-import { Tarjeta, Campo, Select, Boton, Modal, Toast, Cargando, BotonCamara, SelectorEmoji, SelectorSucursalesMultiple } from '../components/ui';
+import { Tarjeta, Campo, Select, Boton, Modal, Toast, Cargando, BotonCamara, SelectorEmoji, SelectorSucursalesMultiple, SelectorDias } from '../components/ui';
 import BuscadorResponsable from '../components/BuscadorResponsable';
 import { esHallazgo } from '../utils/hallazgos';
 
@@ -548,35 +548,6 @@ function EventoItem({ evento, usuario, puedeEditar, onCambio, onIniciarRun }) {
           {evento.serie_id && <button className="text-xs text-gray-400 hover:text-fat-bordo-600" onClick={() => eliminar(true)}>Eliminar esta y futuras de la serie</button>}
         </div>
       )}
-    </div>
-  );
-}
-
-// Selector de días (semana o mes) como círculos togglables - mismo patrón
-// visual que GestionarTurnos, reusado acá para la recurrencia de tareas.
-function SelectorDias({ opciones, seleccionados, onChange, chico }) {
-  function alternar(valor) {
-    onChange(seleccionados.includes(valor) ? seleccionados.filter((v) => v !== valor) : [...seleccionados, valor]);
-  }
-  return (
-    <div className="flex flex-wrap gap-1.5">
-      {opciones.map((o) => {
-        const valor = typeof o === 'object' ? o.valor : o;
-        const label = typeof o === 'object' ? o.label : o;
-        const activo = seleccionados.includes(valor);
-        return (
-          <button
-            key={valor}
-            type="button"
-            onClick={() => alternar(valor)}
-            className={`${chico ? 'w-7 h-7 text-xs' : 'w-9 h-9 text-sm'} rounded-full font-medium border ${
-              activo ? 'bg-fat-bordo-500 text-white border-fat-bordo-500' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
-            }`}
-          >
-            {label}
-          </button>
-        );
-      })}
     </div>
   );
 }

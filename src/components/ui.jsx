@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 
 export function Campo({ label, ...props }) {
   return (
-    <div>
+    <div className="min-w-0">
       <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
       <input
         {...props}
@@ -291,6 +291,36 @@ export function SelectorSucursalesMultiple({ sucursales, seleccionadas, onChange
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// Selector de días (semana o mes) como círculos togglables - compartido
+// entre la recurrencia de tareas (Calendario) y "Programar asignaciones"
+// (GestionarTurnos). `opciones` acepta strings sueltos o {label, valor}.
+export function SelectorDias({ opciones, seleccionados, onChange, chico }) {
+  function alternar(valor) {
+    onChange(seleccionados.includes(valor) ? seleccionados.filter((v) => v !== valor) : [...seleccionados, valor]);
+  }
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {opciones.map((o) => {
+        const valor = typeof o === 'object' ? o.valor : o;
+        const label = typeof o === 'object' ? o.label : o;
+        const activo = seleccionados.includes(valor);
+        return (
+          <button
+            key={valor}
+            type="button"
+            onClick={() => alternar(valor)}
+            className={`${chico ? 'w-7 h-7 text-xs' : 'w-9 h-9 text-sm'} rounded-full font-medium border ${
+              activo ? 'bg-fat-bordo-500 text-white border-fat-bordo-500' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+            }`}
+          >
+            {label}
+          </button>
+        );
+      })}
     </div>
   );
 }

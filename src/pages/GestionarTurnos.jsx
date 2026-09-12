@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
-import { Tarjeta, Campo, Select, Boton, Toast, Cargando } from '../components/ui';
+import { Tarjeta, Campo, Select, Boton, Modal, Toast, Cargando, SelectorDias } from '../components/ui';
 import BuscadorResponsable from '../components/BuscadorResponsable';
 
 const PUESTOS = ['COCINA', 'CAJA', 'REFUERZO_COCINA'];
@@ -10,10 +10,12 @@ const PUESTO_LABEL = { COCINA: 'Cocina', CAJA: 'Caja', REFUERZO_COCINA: 'Refuerz
 const TURNO_LABEL = { DIURNO: 'Diurno', NOCTURNO: 'Nocturno' };
 const FERIADO_TIPO_LABEL = { inamovible: 'Feriado nacional', trasladable: 'Feriado trasladable', puente: 'Puente turístico' };
 const ICONO_EVENTO_ESPECIAL_DEFAULT = '🎉';
-// Lun..Dom en la UI -> Date#getDay() (0=domingo..6=sábado), que es lo que espera el backend.
+// Lun..Dom en la UI -> Date#getDay() (0=domingo..6=sábado), que es lo que
+// espera el backend. Una sola letra (no "Lun"/"Dom") para que las 7 entren
+// en una fila dentro de un círculo chico sin saltar de línea en mobile.
 const DIAS_SEMANA_UI = [
-  { label: 'Lun', valor: 1 }, { label: 'Mar', valor: 2 }, { label: 'Mié', valor: 3 },
-  { label: 'Jue', valor: 4 }, { label: 'Vie', valor: 5 }, { label: 'Sáb', valor: 6 }, { label: 'Dom', valor: 0 },
+  { label: 'L', valor: 1 }, { label: 'M', valor: 2 }, { label: 'X', valor: 3 },
+  { label: 'J', valor: 4 }, { label: 'V', valor: 5 }, { label: 'S', valor: 6 }, { label: 'D', valor: 0 },
 ];
 
 function aClaveDia(d) {
@@ -214,12 +216,6 @@ export default function GestionarTurnos() {
     }
   }
 
-  function alternarDia(valor) {
-    setFormProgramar((f) => ({
-      ...f, diasSemana: f.diasSemana.includes(valor) ? f.diasSemana.filter((d) => d !== valor) : [...f.diasSemana, valor],
-    }));
-  }
-
   async function enviarProgramacion(e) {
     e.preventDefault();
     setError('');
@@ -323,31 +319,26 @@ export default function GestionarTurnos() {
     );
   }
 
+  // Tocar el turno abre un modal para elegir a quién agregar (ver
+  // celdaAbierta más abajo) en vez de expandir un formulario adentro de esta
+  // celda chica - las celdas achicadas para entrar 7 en una fila en mobile
+  // no tienen lugar para eso. El "+" queda igual, solo cambia dónde se
+  // completa el alta. El turno directamente no se renderiza si no está
+  // habilitado ese día (ver los `diurnoHabilitado`/`nocturnoHabilitado` de
+  // más arriba) - antes se dibujaba un placeholder "No disponible".
   function CeldaTurno({ fecha, turnoTipo }) {
     const claveFecha = aClaveDia(fecha);
-    const abierta = celdaAbierta?.fecha === claveFecha && celdaAbierta?.turnoTipo === turnoTipo;
-    const habilitado = horarios?.get(`${fecha.getDay()}|${turnoTipo}`);
-
-    if (!habilitado) {
-      return (
-        <div className="border border-dashed border-gray-100 rounded-lg p-1.5 bg-gray-50/20">
-          <span className="text-[10px] font-semibold text-gray-300 uppercase">{TURNO_LABEL[turnoTipo]}</span>
-          <p className="text-[10px] text-gray-300 mt-1">No disponible</p>
-        </div>
-      );
-    }
-
     return (
-      <div className="border border-gray-100 rounded-lg p-1.5 bg-gray-50/50">
+      <div className="border border-gray-100 rounded-lg p-1 sm:p-1.5 bg-gray-50/50">
         <div className="flex items-center justify-between mb-1">
-          <span className="text-[10px] font-semibold text-gray-500 uppercase">{TURNO_LABEL[turnoTipo]}</span>
-          <button onClick={() => abrirAlta(claveFecha, turnoTipo)} className="text-fat-bordo-600 hover:bg-fat-bordo-50 rounded w-4 h-4 leading-none text-sm font-bold">+</button>
+          <span className="text-[9px] sm:text-[10px] font-semibold text-gray-500 uppercase truncate">{TURNO_LABEL[turnoTipo]}</span>
+          <button onClick={() => abrirAlta(claveFecha, turnoTipo)} className="text-fat-bordo-600 hover:bg-fat-bordo-50 rounded w-4 h-4 leading-none text-sm font-bold shrink-0">+</button>
         </div>
         <div className="space-y-1">
           {PUESTOS.map((p) => {
             const lista = turnosPorDia.get(`${claveFecha}|${turnoTipo}|${p}`) || [];
             return (
-              <div key={p} className="text-[10px]">
+              <div key={p} className="text-[9px] sm:text-[10px]">
                 <span className="text-gray-400">{PUESTO_LABEL[p]} ({lista.length})</span>
                 {lista.length > 0 && (
                   <div className="flex flex-wrap gap-0.5 mt-0.5">
@@ -371,25 +362,6 @@ export default function GestionarTurnos() {
             );
           })}
         </div>
-        {abierta && (
-          <div className="mt-1.5 pt-1.5 border-t border-gray-200 space-y-1.5">
-            <BuscadorResponsable
-              sucursalId={sucursalId} label="" nombreValue={formAlta.responsable?.nombre}
-              onChange={(id, u) => setFormAlta({ responsable: u, puesto: u?.puesto || '' })}
-            />
-            <select
-              className="w-full rounded border border-gray-300 px-1 py-1 text-[11px]"
-              value={formAlta.puesto} onChange={(e) => setFormAlta({ ...formAlta, puesto: e.target.value })}
-            >
-              <option value="">Puesto…</option>
-              {PUESTOS.map((p) => <option key={p} value={p}>{PUESTO_LABEL[p]}</option>)}
-            </select>
-            <div className="flex gap-1">
-              <button onClick={confirmarAlta} disabled={guardandoAlta} className="flex-1 bg-fat-bordo-500 text-white text-[11px] rounded py-1 disabled:opacity-50">{guardandoAlta ? '...' : 'Agregar'}</button>
-              <button onClick={() => setCeldaAbierta(null)} className="flex-1 bg-white border border-gray-300 text-[11px] rounded py-1">Cancelar</button>
-            </div>
-          </div>
-        )}
       </div>
     );
   }
@@ -456,19 +428,27 @@ export default function GestionarTurnos() {
             {!turnos && <Cargando />}
 
             {turnos && vista === 'SEMANA' && (
-              <div className="grid grid-cols-7 gap-1.5 overflow-x-auto">
-                {semana.map((d) => (
-                  <div key={aClaveDia(d)} className="min-w-[130px]">
-                    <p className="text-xs font-medium text-gray-700 text-center mb-1">
-                      {d.toLocaleDateString('es-AR', { weekday: 'short', day: '2-digit' })}
-                    </p>
-                    <NovedadesDia claveFecha={aClaveDia(d)} />
-                    <div className="space-y-1.5">
-                      <CeldaTurno fecha={d} turnoTipo="DIURNO" />
-                      <CeldaTurno fecha={d} turnoTipo="NOCTURNO" />
+              <div className="grid grid-cols-7 gap-1">
+                {semana.map((d) => {
+                  const diaSemana = d.getDay();
+                  const diurnoHabilitado = horarios?.get(`${diaSemana}|DIURNO`);
+                  const nocturnoHabilitado = horarios?.get(`${diaSemana}|NOCTURNO`);
+                  return (
+                    <div key={aClaveDia(d)} className="min-w-0">
+                      <p className="text-[11px] sm:text-xs font-medium text-gray-700 text-center mb-1 truncate">
+                        {d.toLocaleDateString('es-AR', { weekday: 'short', day: '2-digit' })}
+                      </p>
+                      <NovedadesDia claveFecha={aClaveDia(d)} compacto />
+                      <div className="space-y-1">
+                        {diurnoHabilitado && <CeldaTurno fecha={d} turnoTipo="DIURNO" />}
+                        {nocturnoHabilitado && <CeldaTurno fecha={d} turnoTipo="NOCTURNO" />}
+                        {!diurnoHabilitado && !nocturnoHabilitado && (
+                          <p className="text-[9px] text-gray-300 text-center">Sin turnos</p>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 
@@ -545,16 +525,7 @@ export default function GestionarTurnos() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Días de la semana</label>
-                <div className="flex gap-1.5 flex-wrap">
-                  {DIAS_SEMANA_UI.map((d) => (
-                    <button
-                      key={d.valor} type="button" onClick={() => alternarDia(d.valor)}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-medium border ${formProgramar.diasSemana.includes(d.valor) ? 'bg-fat-bordo-500 text-white border-fat-bordo-500' : 'bg-white text-gray-600 border-gray-300'}`}
-                    >
-                      {d.label}
-                    </button>
-                  ))}
-                </div>
+                <SelectorDias opciones={DIAS_SEMANA_UI} seleccionados={formProgramar.diasSemana} onChange={(v) => setFormProgramar({ ...formProgramar, diasSemana: v })} />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <Campo label="Desde" type="date" required value={formProgramar.fechaDesde} onChange={(e) => setFormProgramar({ ...formProgramar, fechaDesde: e.target.value })} />
@@ -566,6 +537,28 @@ export default function GestionarTurnos() {
         </>
       )}
 
+      {celdaAbierta && (
+        <Modal
+          titulo={`Agregar · ${TURNO_LABEL[celdaAbierta.turnoTipo]} · ${new Date(`${celdaAbierta.fecha}T00:00:00`).toLocaleDateString('es-AR', { weekday: 'long', day: '2-digit', month: '2-digit' })}`}
+          onClose={() => setCeldaAbierta(null)}
+        >
+          <div className="space-y-3">
+            <BuscadorResponsable
+              sucursalId={sucursalId} label="Colaborador" nombreValue={formAlta.responsable?.nombre}
+              onChange={(id, u) => setFormAlta({ responsable: u, puesto: u?.puesto || '' })}
+            />
+            <Select label="Puesto" value={formAlta.puesto} onChange={(e) => setFormAlta({ ...formAlta, puesto: e.target.value })}>
+              <option value="">Elegí un puesto</option>
+              {PUESTOS.map((p) => <option key={p} value={p}>{PUESTO_LABEL[p]}</option>)}
+            </Select>
+            {error && <p className="text-sm text-fat-bordo-600">{error}</p>}
+            <div className="flex gap-2">
+              <Boton ancho="w-auto" cargando={guardandoAlta} onClick={confirmarAlta}>Agregar</Boton>
+              <Boton ancho="w-auto" variante="secundario" onClick={() => setCeldaAbierta(null)}>Cancelar</Boton>
+            </div>
+          </div>
+        </Modal>
+      )}
       {toast && <Toast mensaje={toast} onCerrar={() => setToast('')} />}
     </div>
   );
