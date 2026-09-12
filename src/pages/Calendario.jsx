@@ -597,7 +597,7 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, onClose, onCreado }
           <Select label="Tipo" value={form.tipo} onChange={(e) => setForm({ ...form, tipo: e.target.value })}>
             <option value="AUDITORIA">Auditoría{esGerente ? ' interna' : ''}</option>
             <option value="SEGUIMIENTO">Seguimiento</option>
-            <option value="TAREA">Tarea rutinaria</option>
+            <option value="TAREA">Tarea</option>
             {!esGerente && <option value="EVENTO_ESPECIAL">Evento especial</option>}
           </Select>
           <FormSeguimiento sucursales={sucursales} usuario={usuario} esGerente={esGerente} onCreado={onCreado} />
@@ -612,7 +612,7 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, onClose, onCreado }
         <Select label="Tipo" value={form.tipo} onChange={(e) => setForm({ ...form, tipo: e.target.value })}>
           <option value="AUDITORIA">Auditoría{esGerente ? ' interna' : ''}</option>
           <option value="SEGUIMIENTO">Seguimiento</option>
-          <option value="TAREA">Tarea rutinaria</option>
+          <option value="TAREA">Tarea</option>
           {!esGerente && <option value="EVENTO_ESPECIAL">Evento especial</option>}
         </Select>
 

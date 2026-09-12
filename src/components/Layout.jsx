@@ -35,12 +35,15 @@ function itemsDeNav(rol) {
   }
   items.push({ to: '/tareas', label: 'Tareas' });
   if (rol === 'ADMIN' || rol === 'GERENTE') {
-    items.push({ to: '/configuracion', label: 'Configuración' });
+    const hijosConfig = [{ to: '/configuracion/sucursales', label: 'Sucursales' }];
+    hijosConfig.push({ to: '/configuracion/usuarios', label: rol === 'GERENTE' ? 'Colaboradores' : 'Usuarios' });
+    if (rol === 'ADMIN') hijosConfig.push({ to: '/configuracion/tareas', label: 'Tareas' });
+    items.push({ label: 'Configuración', children: hijosConfig });
   }
   return items;
 }
 
-function CampanaNotificaciones() {
+function CampanaNotificaciones({ abrirHaciaArriba = false }) {
   const [notificaciones, setNotificaciones] = useState([]);
   const [abierto, setAbierto] = useState(false);
   // 'no_soportado' | 'desactivado' | 'activado' | 'activando'
@@ -98,7 +101,7 @@ function CampanaNotificaciones() {
         )}
       </button>
       {abierto && (
-        <div className="absolute right-0 mt-2 w-80 max-w-[90vw] bg-white border border-gray-200 rounded-lg shadow-xl max-h-96 overflow-y-auto z-50">
+        <div className={`absolute ${abrirHaciaArriba ? 'bottom-full left-0 mb-2' : 'right-0 mt-2'} w-80 max-w-[90vw] bg-white border border-gray-200 rounded-lg shadow-xl max-h-96 overflow-y-auto z-50`}>
           {notificaciones.length === 0 && <p className="text-sm text-gray-400 p-4">No tenés notificaciones.</p>}
           {notificaciones.map((n) => (
             <button key={n.id} onClick={() => marcarLeida(n)} className={`w-full text-left px-3 py-2.5 border-b border-gray-50 last:border-0 hover:bg-gray-50 ${!n.leida_en ? 'bg-fat-bordo-50/40' : ''}`}>
@@ -197,7 +200,7 @@ export default function Layout() {
         </nav>
         <div className="border-t border-gray-100 p-3 space-y-2 shrink-0">
           <div className="flex items-center gap-1 px-1">
-            <CampanaNotificaciones />
+            <CampanaNotificaciones abrirHaciaArriba />
             <InstalarApp />
           </div>
           <p className="text-xs text-gray-500 truncate px-1">{usuario.nombre || usuario.email} · {usuario.rol}</p>
@@ -235,7 +238,7 @@ export default function Layout() {
               </div>
               <nav className="flex-1 overflow-y-auto p-4 flex flex-col gap-1">
                 {items.map((it) => (
-                  <NavLink key={it.to} to={it.to} end={it.end} className={linkClassSidebar}>{it.label}</NavLink>
+                  <ItemNav key={it.to || it.label} item={it} gruposAbiertos={gruposAbiertos} alternarGrupo={alternarGrupo} />
                 ))}
               </nav>
               <div className="border-t border-gray-100 p-4 space-y-2 text-sm shrink-0">

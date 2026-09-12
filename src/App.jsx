@@ -60,6 +60,7 @@ export default function App() {
               <Route element={<RequireRole roles={['ADMIN', 'GERENTE']} />}>
                 <Route path="/turnos" element={<GestionarTurnos />} />
                 <Route path="/configuracion" element={<Configuracion />} />
+                <Route path="/configuracion/:tab" element={<Configuracion />} />
               </Route>
 
               <Route element={<RequireRole roles={['ADMIN', 'AUDITOR']} />}>
