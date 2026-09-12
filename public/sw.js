@@ -14,8 +14,8 @@ self.addEventListener('push', (event) => {
   event.waitUntil(
     self.registration.showNotification(titulo, {
       body: datos.cuerpo || '',
-      icon: '/brand/fatburger_logo.png',
-      badge: '/brand/fatburger_logo.png',
+      icon: '/brand/pwa-icon-192.png',
+      badge: '/brand/pwa-icon-192.png',
       data: { url: datos.url || '/calendario' },
     })
   );

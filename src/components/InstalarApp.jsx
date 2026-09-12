@@ -58,7 +58,7 @@ export default function InstalarApp() {
       {mostrarInstrucciones && (
         <Modal titulo="Descargar FAT Audit" onClose={() => setMostrarInstrucciones(false)}>
           <div className="space-y-4 text-sm text-gray-700">
-            <img src="/brand/fatburger_logo.png" alt="FAT Audit" className="w-14 h-14 rounded-xl mx-auto object-contain" />
+            <img src="/brand/pwa-icon-192.png" alt="FAT Audit" className="w-14 h-14 rounded-xl mx-auto object-contain" />
             <p className="text-center">Instalá FAT Audit en tu pantalla de inicio para acceder más rápido, como una app.</p>
             <ol className="space-y-3">
               <li className="flex items-start gap-3">
