@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
-import { Tarjeta, Campo, Select, Boton, Modal, Toast, Cargando } from '../components/ui';
+import { Tarjeta, Campo, Select, Boton, Modal, Toast, Cargando, BotonCamara } from '../components/ui';
 import BuscadorResponsable from '../components/BuscadorResponsable';
 
 const DIAS_SEMANA = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
@@ -281,11 +281,14 @@ function DiaDetalle({ eventos, usuario, onCambio, onIniciarRun }) {
 function EventoItem({ evento, usuario, puedeEditar, onCambio, onIniciarRun }) {
   const [completando, setCompletando] = useState(false);
   const [comentario, setComentario] = useState('');
+  const [archivo, setArchivo] = useState(null);
   const [iniciando, setIniciando] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [solicitando, setSolicitando] = useState(false);
   const [motivo, setMotivo] = useState('');
   const [error, setError] = useState('');
+
+  const puedeCompletar = new Date(evento.fecha_hora) <= new Date();
 
   async function iniciar() {
     setIniciando(true);
@@ -301,10 +304,17 @@ function EventoItem({ evento, usuario, puedeEditar, onCambio, onIniciarRun }) {
   }
 
   async function completar() {
+    if (evento.evidencia_obligatoria && !archivo) { setError('Esta tarea requiere una foto de evidencia'); return; }
     setGuardando(true);
     setError('');
     try {
-      await api.post(`/api/calendario/${evento.id}/completar`, { comentario });
+      let evidenciaUrl = null;
+      if (archivo) {
+        const { uploadUrl, publicUrl } = await api.post(`/api/calendario/${evento.id}/evidencia/url-subida`, { content_type: archivo.type });
+        await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': archivo.type }, body: archivo });
+        evidenciaUrl = publicUrl;
+      }
+      await api.post(`/api/calendario/${evento.id}/completar`, { comentario, evidencia_url: evidenciaUrl, evidencia_tipo: evidenciaUrl ? 'FOTO' : null });
       onCambio();
     } catch (err) {
       setError(err.message);
@@ -352,7 +362,7 @@ function EventoItem({ evento, usuario, puedeEditar, onCambio, onIniciarRun }) {
         </div>
         <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 ${
           evento.estado_efectivo === 'COMPLETADA' ? 'bg-green-100 text-green-700'
-          : evento.estado_efectivo === 'VENCIDA' ? 'bg-fat-bordo-100 text-fat-bordo-700'
+          : evento.estado_efectivo === 'VENCIDA' || evento.estado_efectivo === 'DEMORADA' ? 'bg-fat-bordo-100 text-fat-bordo-700'
           : evento.estado_efectivo === 'OMITIDA' ? 'bg-gray-100 text-gray-500'
           : 'bg-yellow-100 text-yellow-700'
         }`}>{evento.estado_efectivo}</span>
@@ -363,13 +373,21 @@ function EventoItem({ evento, usuario, puedeEditar, onCambio, onIniciarRun }) {
           {completando ? (
             <div className="space-y-2">
               <input className="w-full rounded-lg border border-gray-300 px-2 py-1 text-xs" placeholder="Comentario (opcional)" value={comentario} onChange={(e) => setComentario(e.target.value)} />
+              {evento.evidencia_obligatoria && (
+                <div className="flex items-center gap-2">
+                  <BotonCamara archivo={archivo} onArchivo={setArchivo} />
+                  <span className="text-[10px] text-gray-400">Requiere foto de evidencia (solo cámara).</span>
+                </div>
+              )}
               <div className="flex gap-2">
                 <Boton ancho="w-auto" cargando={guardando} onClick={completar}>Confirmar cumplimiento</Boton>
                 <Boton ancho="w-auto" variante="secundario" onClick={() => setCompletando(false)}>Cancelar</Boton>
               </div>
             </div>
           ) : (
-            <Boton ancho="w-auto" variante="secundario" onClick={() => setCompletando(true)}>Marcar cumplida</Boton>
+            <div title={!puedeCompletar ? 'Todavía no llegó la fecha/hora programada' : undefined}>
+              <Boton ancho="w-auto" variante="secundario" disabled={!puedeCompletar} onClick={() => setCompletando(true)}>Marcar cumplida</Boton>
+            </div>
           )}
         </div>
       )}

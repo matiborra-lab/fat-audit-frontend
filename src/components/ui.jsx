@@ -192,3 +192,26 @@ export function Resultado({ valor }) {
 export function Cargando() {
   return <div className="min-h-screen flex items-center justify-center text-gray-400">Cargando…</div>;
 }
+
+// Botón "📷 Sacar foto" que abre la cámara del dispositivo directamente (sin
+// opción de elegir de la galería) - capture="environment" fuerza la cámara
+// trasera en los navegadores que lo soportan (mismo patrón que la evidencia
+// de auditorías en Ejecucion.jsx). onArchivo(file) se llama al elegir/sacar
+// una foto.
+export function BotonCamara({ onArchivo, disabled, label = 'Sacar foto', archivo }) {
+  return (
+    <label className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border cursor-pointer ${
+      archivo ? 'border-green-400 text-green-700 bg-green-50' : 'border-gray-300 text-gray-600'
+    } ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
+      📷 {archivo ? 'Foto lista' : label}
+      <input
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        disabled={disabled}
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) onArchivo(f); e.target.value = ''; }}
+      />
+    </label>
+  );
+}
