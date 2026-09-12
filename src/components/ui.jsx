@@ -215,3 +215,29 @@ export function BotonCamara({ onArchivo, disabled, label = 'Sacar foto', archivo
     </label>
   );
 }
+
+// Banco fijo de emojis para tipos de tarea y Evento especial (elegido por el
+// usuario) - un solo ícono seleccionable por vez.
+export const BANCO_EMOJIS = ['📈', '🗓️', '🛠️', '🖥️', '💵', '🎁', '🎉', '📝', '❤️', '❌', '‼️', '🔔', '🇦🇷', '⚽', '🏈', '🏆', '🍻', '🍔', '🍟', '🥩', '🍞', '🥐', '🥓', '🍫', '🥬', '🍅', '🧀', '☀️', '🌨️', '🐷', '🐔', '🤟', '🧹', '🛵'];
+
+export function SelectorEmoji({ opciones = BANCO_EMOJIS, valor, onChange, label }) {
+  return (
+    <div>
+      {label && <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>}
+      <div className="flex flex-wrap gap-1.5">
+        {opciones.map((emoji) => (
+          <button
+            key={emoji}
+            type="button"
+            onClick={() => onChange(emoji)}
+            className={`w-8 h-8 rounded-lg border text-base flex items-center justify-center ${
+              valor === emoji ? 'border-fat-bordo-500 bg-fat-bordo-50' : 'border-gray-200 hover:bg-gray-50'
+            }`}
+          >
+            {emoji}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}

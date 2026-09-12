@@ -1,13 +1,20 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/client';
-import { Tarjeta, Campo, Boton, Modal, Toast, Cargando, Leyenda } from '../components/ui';
+import { Tarjeta, Campo, Boton, Modal, Toast, Cargando, Leyenda, SelectorEmoji } from '../components/ui';
+
+const ICONO_TIPO_DEFAULT = '📝';
 
 // Administración del catálogo de tareas rutinarias (tipo -> tareas) - ver
-// plan Calendario v2. Solo Admin la ve (Configuracion.jsx la gatea).
+// plan Calendario v2/v3. Solo Admin la ve (Configuracion.jsx la gatea). El
+// ícono del tipo es el que se usa para las tareas de ese tipo en el
+// calendario (ver TIPO_ICONO en Calendario.jsx) - no se elige por tarea
+// puntual ni al programar desde el calendario.
 export default function TareasCatalogo() {
   const [tipos, setTipos] = useState(null);
   const [sucursales, setSucursales] = useState([]);
   const [nuevoTipo, setNuevoTipo] = useState('');
+  const [nuevoIcono, setNuevoIcono] = useState(ICONO_TIPO_DEFAULT);
+  const [tipoEnEdicion, setTipoEnEdicion] = useState(null);
   const [tareaEnEdicion, setTareaEnEdicion] = useState(null); // { tipoTareaId, tarea | null }
   const [toast, setToast] = useState('');
   const [error, setError] = useState('');
@@ -38,8 +45,9 @@ export default function TareasCatalogo() {
     e.preventDefault();
     if (!nuevoTipo.trim()) return;
     try {
-      await api.post('/api/tipos-tarea', { nombre: nuevoTipo.trim() });
+      await api.post('/api/tipos-tarea', { nombre: nuevoTipo.trim(), icono: nuevoIcono });
       setNuevoTipo('');
+      setNuevoIcono(ICONO_TIPO_DEFAULT);
       recargar();
     } catch (err) {
       setError(err.message);
@@ -70,19 +78,21 @@ export default function TareasCatalogo() {
         <Boton ancho="w-auto" variante="secundario" cargando={actualizandoFeriados} onClick={actualizarFeriados}>Actualizar feriados</Boton>
       </Tarjeta>
 
-      <Tarjeta className="p-4">
+      <Tarjeta className="p-4 space-y-3">
         <form onSubmit={crearTipo} className="flex gap-2 items-end">
           <div className="flex-1"><Campo label="Nuevo tipo de tarea" value={nuevoTipo} onChange={(e) => setNuevoTipo(e.target.value)} placeholder="Ej: Limpieza" /></div>
           <Boton ancho="w-auto" type="submit">Agregar</Boton>
         </form>
+        <SelectorEmoji label="Ícono" valor={nuevoIcono} onChange={setNuevoIcono} />
       </Tarjeta>
 
       {tipos.map((tipo) => (
         <Tarjeta key={tipo.id} className="p-4">
           <div className="flex items-center justify-between mb-2">
-            <h3 className="font-medium text-gray-900">{tipo.nombre} {!tipo.activo && <span className="text-xs text-gray-400">(inactivo)</span>}</h3>
+            <h3 className="font-medium text-gray-900">{tipo.icono || ICONO_TIPO_DEFAULT} {tipo.nombre} {!tipo.activo && <span className="text-xs text-gray-400">(inactivo)</span>}</h3>
             <div className="flex items-center gap-3 text-xs">
               <button onClick={() => setTareaEnEdicion({ tipoTareaId: tipo.id, tarea: null })} className="text-fat-bordo-600 hover:underline">+ Tarea</button>
+              <button onClick={() => setTipoEnEdicion(tipo)} className="text-fat-bordo-600 hover:underline">Editar</button>
               <button onClick={() => alternarTipoActivo(tipo)} className="text-gray-500 hover:underline">{tipo.activo ? 'Desactivar' : 'Activar'}</button>
             </div>
           </div>
@@ -114,6 +124,14 @@ export default function TareasCatalogo() {
           sucursales={sucursales}
           onClose={() => setTareaEnEdicion(null)}
           onGuardado={() => { setTareaEnEdicion(null); setToast('Guardado'); recargar(); }}
+        />
+      )}
+
+      {tipoEnEdicion && (
+        <ModalTipoTarea
+          tipo={tipoEnEdicion}
+          onClose={() => setTipoEnEdicion(null)}
+          onGuardado={() => { setTipoEnEdicion(null); setToast('Guardado'); recargar(); }}
         />
       )}
 
@@ -183,6 +201,39 @@ function ModalTarea({ tipoTareaId, tarea, sucursales, onClose, onGuardado }) {
             </div>
           )}
         </div>
+        {error && <p className="text-sm text-fat-bordo-600">{error}</p>}
+        <Boton type="submit" cargando={guardando}>Guardar</Boton>
+      </form>
+    </Modal>
+  );
+}
+
+function ModalTipoTarea({ tipo, onClose, onGuardado }) {
+  const [nombre, setNombre] = useState(tipo.nombre);
+  const [icono, setIcono] = useState(tipo.icono || ICONO_TIPO_DEFAULT);
+  const [error, setError] = useState('');
+  const [guardando, setGuardando] = useState(false);
+
+  async function guardar(e) {
+    e.preventDefault();
+    if (!nombre.trim()) return;
+    setError('');
+    setGuardando(true);
+    try {
+      await api.patch(`/api/tipos-tarea/${tipo.id}`, { nombre: nombre.trim(), icono });
+      onGuardado();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  return (
+    <Modal titulo="Editar tipo de tarea" onClose={onClose}>
+      <form onSubmit={guardar} className="space-y-4">
+        <Campo label="Nombre" required value={nombre} onChange={(e) => setNombre(e.target.value)} autoFocus />
+        <SelectorEmoji label="Ícono" valor={icono} onChange={setIcono} />
         {error && <p className="text-sm text-fat-bordo-600">{error}</p>}
         <Boton type="submit" cargando={guardando}>Guardar</Boton>
       </form>

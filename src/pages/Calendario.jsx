@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
-import { Tarjeta, Campo, Select, Boton, Modal, Toast, Cargando, BotonCamara } from '../components/ui';
+import { Tarjeta, Campo, Select, Boton, Modal, Toast, Cargando, BotonCamara, SelectorEmoji } from '../components/ui';
 import BuscadorResponsable from '../components/BuscadorResponsable';
 import { esHallazgo } from '../utils/hallazgos';
 
@@ -21,7 +21,19 @@ const TIPO_COLOR = {
   FERIADO: 'bg-sky-100 text-sky-800',
   CUMPLEANOS: 'bg-fuchsia-100 text-fuchsia-800',
 };
-const TIPO_ICONO = { FERIADO: '🇦🇷', CUMPLEANOS: '🎁' };
+const TIPO_ICONO = { AUDITORIA: '📋', AUDITORIA_INTERNA: '📋', SEGUIMIENTO: '📋', FERIADO: '🇦🇷', CUMPLEANOS: '🎁' };
+const ICONO_TAREA_DEFAULT = '📝';
+const ICONO_EVENTO_ESPECIAL_DEFAULT = '🎉';
+
+// Ícono chico "al costado del nombre" del evento: fijo por tipo (Auditoría/
+// Seguimiento/Feriado/Cumpleaños), el de una Tarea sale del tipo de tarea
+// elegido en Configuración (no se elige al programarla), y el de un Evento
+// especial lo elige quien lo crea.
+function iconoEvento(e) {
+  if (e.tipo === 'EVENTO_ESPECIAL') return e.icono || ICONO_EVENTO_ESPECIAL_DEFAULT;
+  if (e.tipo === 'TAREA') return e.tipo_tarea_icono || ICONO_TAREA_DEFAULT;
+  return TIPO_ICONO[e.tipo] || '';
+}
 const FERIADO_TIPO_LABEL = { inamovible: 'Feriado nacional', trasladable: 'Feriado trasladable', puente: 'Puente turístico' };
 const TIPO_LABEL = { AUDITORIA: 'Auditoría de marca', AUDITORIA_INTERNA: 'Auditoría interna', SEGUIMIENTO: 'Seguimiento', TAREA: 'Tarea', TURNO: 'Turno', EVENTO_ESPECIAL: 'Evento especial', FERIADO: 'Feriado', CUMPLEANOS: 'Cumpleaños' };
 const TIPOS_FILTRO = [
@@ -168,13 +180,17 @@ function SelectorSucursalesMultiple({ sucursales, seleccionadas, onChange }) {
   );
 }
 
+// Ícono representativo en la leyenda: el fijo por tipo, o el default de
+// Tarea/Evento especial (el real de cada instancia varía, ver iconoEvento).
+const ICONO_LEYENDA = { ...TIPO_ICONO, TAREA: ICONO_TAREA_DEFAULT, EVENTO_ESPECIAL: ICONO_EVENTO_ESPECIAL_DEFAULT };
+
 function Leyenda() {
   return (
     <div className="flex flex-wrap gap-x-4 gap-y-1.5">
       {Object.entries(TIPO_LABEL).map(([clave, label]) => (
         <span key={clave} className="inline-flex items-center gap-1.5 text-xs text-gray-500">
           <span className={`w-2.5 h-2.5 rounded-full ${(TIPO_COLOR[clave] || '').split(' ')[0]}`} />
-          {label}
+          {ICONO_LEYENDA[clave] ? `${ICONO_LEYENDA[clave]} ` : ''}{label}
         </span>
       ))}
     </div>
@@ -361,7 +377,7 @@ export default function Calendario() {
                   </p>
                 ))}
                 {eventosDia.slice(0, maxVisibles).map((e) => (
-                  <p key={e.id} className={`text-[10px] px-1 py-0.5 rounded truncate ${colorEvento(e)}`} title={etiquetaEvento(e)}>{e.titulo}</p>
+                  <p key={e.id} className={`text-[10px] px-1 py-0.5 rounded truncate ${colorEvento(e)}`} title={etiquetaEvento(e)}>{iconoEvento(e)} {e.titulo}</p>
                 ))}
                 {eventosDia.length > maxVisibles && <p className="text-[10px] text-gray-400">+{eventosDia.length - maxVisibles} más</p>}
               </div>
@@ -508,7 +524,7 @@ function EventoItem({ evento, usuario, puedeEditar, onCambio, onIniciarRun }) {
       <div className="flex items-start justify-between gap-2">
         <div>
           <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${colorEvento(evento)}`}>{etiquetaEvento(evento)}</span>
-          <p className="text-sm font-medium text-gray-900 mt-1">{evento.titulo}{evento.puesto ? ` · ${evento.puesto}` : ''}</p>
+          <p className="text-sm font-medium text-gray-900 mt-1">{iconoEvento(evento)} {evento.titulo}{evento.puesto ? ` · ${evento.puesto}` : ''}</p>
           <p className="text-xs text-gray-400">
             {evento.sucursal_nombre} · {new Date(evento.fecha_hora).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
             {evento.responsable_nombre && ` · ${evento.responsable_nombre}`}
@@ -636,7 +652,7 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, sucursalEnVista, on
     tareaCatalogoId: '', tituloOtro: '', fotoRequerida: false,
     tareaRecurrencia: 'NINGUNA', diasSemana: [], diasMes: [], sinHora: false, fechaHasta: '',
     // Específico de EVENTO_ESPECIAL (vacío = todas las sucursales):
-    sucursalesEspecialesIds: [],
+    sucursalesEspecialesIds: [], icono: ICONO_EVENTO_ESPECIAL_DEFAULT,
   });
   const [tiposTarea, setTiposTarea] = useState([]);
   const [tipoTareaAbierto, setTipoTareaAbierto] = useState(''); // qué tipo está desplegado en el 2do select
@@ -689,6 +705,7 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, sucursalEnVista, on
           descripcion: form.descripcion || null,
           responsable_user_id: form.responsable_user_id || null,
           fecha_hora: `${form.fecha}T${form.hora}:00`,
+          icono: form.icono || ICONO_EVENTO_ESPECIAL_DEFAULT,
         });
       } else if (form.tipo === 'TAREA' && form.tareaRecurrencia !== 'NINGUNA') {
         if (!sucursalId) throw new Error('Elegí una sucursal');
@@ -746,7 +763,7 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, sucursalEnVista, on
             <option value="AUDITORIA">Auditoría{esGerente ? ' interna' : ''}</option>
             <option value="SEGUIMIENTO">Seguimiento</option>
             <option value="TAREA">Tarea</option>
-            {!esGerente && <option value="EVENTO_ESPECIAL">Evento especial</option>}
+            {esAdmin && <option value="EVENTO_ESPECIAL">Evento especial</option>}
           </Select>
           <FormSeguimiento sucursales={sucursales} usuario={usuario} esGerente={esGerente} onCreado={onCreado} />
         </div>
@@ -761,7 +778,7 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, sucursalEnVista, on
           <option value="AUDITORIA">Auditoría{esGerente ? ' interna' : ''}</option>
           <option value="SEGUIMIENTO">Seguimiento</option>
           <option value="TAREA">Tarea</option>
-          {!esGerente && <option value="EVENTO_ESPECIAL">Evento especial</option>}
+          {esAdmin && <option value="EVENTO_ESPECIAL">Evento especial</option>}
         </Select>
 
         {!esGerente && form.tipo !== 'EVENTO_ESPECIAL' && form.tipo !== 'TAREA' && (
@@ -815,6 +832,7 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, sucursalEnVista, on
           <>
             <Campo label="Título" required value={form.titulo} onChange={(e) => setForm({ ...form, titulo: e.target.value })} />
             <Campo label="Descripción (opcional)" value={form.descripcion} onChange={(e) => setForm({ ...form, descripcion: e.target.value })} />
+            <SelectorEmoji label="Ícono" valor={form.icono} onChange={(v) => setForm({ ...form, icono: v })} />
           </>
         )}
 
