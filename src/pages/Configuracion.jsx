@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import Sucursales from './Sucursales';
 import Usuarios from './Usuarios';
+import TareasCatalogo from './TareasCatalogo';
 
-// Pantalla que agrupa Sucursales y Usuarios (y, más adelante, el catálogo de
-// tareas) en pestañas - ver plan Calendario v2. Reusa esos componentes tal
+// Pantalla que agrupa Sucursales, Usuarios y (solo Admin) el catálogo de
+// tareas en pestañas - ver plan Calendario v2. Reusa esos componentes tal
 // cual, no están acoplados a su ruta anterior.
 export default function Configuracion() {
   const { usuario } = useAuth();
@@ -12,6 +13,7 @@ export default function Configuracion() {
     { key: 'sucursales', label: 'Sucursales', el: <Sucursales /> },
     { key: 'usuarios', label: usuario.rol === 'GERENTE' ? 'Colaboradores' : 'Usuarios', el: <Usuarios /> },
   ];
+  if (usuario.rol === 'ADMIN') tabs.push({ key: 'tareas', label: 'Tareas', el: <TareasCatalogo /> });
   const [tab, setTab] = useState(tabs[0].key);
 
   return (
