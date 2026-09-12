@@ -526,16 +526,19 @@ function EventoItem({ evento, usuario, puedeEditar, onCambio, onIniciarRun }) {
           <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${colorEvento(evento)}`}>{etiquetaEvento(evento)}</span>
           <p className="text-sm font-medium text-gray-900 mt-1">{iconoEvento(evento)} {evento.titulo}{evento.puesto ? ` · ${evento.puesto}` : ''}</p>
           <p className="text-xs text-gray-400">
-            {evento.sucursal_nombre} · {new Date(evento.fecha_hora).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
+            {evento.sucursal_nombre}
+            {evento.tipo !== 'EVENTO_ESPECIAL' && ` · ${new Date(evento.fecha_hora).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}`}
             {evento.responsable_nombre && ` · ${evento.responsable_nombre}`}
           </p>
         </div>
-        <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 ${
-          evento.estado_efectivo === 'COMPLETADA' ? 'bg-green-100 text-green-700'
-          : evento.estado_efectivo === 'VENCIDA' || evento.estado_efectivo === 'DEMORADA' ? 'bg-fat-bordo-100 text-fat-bordo-700'
-          : evento.estado_efectivo === 'OMITIDA' ? 'bg-gray-100 text-gray-500'
-          : 'bg-yellow-100 text-yellow-700'
-        }`}>{evento.estado_efectivo}</span>
+        {evento.tipo !== 'EVENTO_ESPECIAL' && (
+          <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 ${
+            evento.estado_efectivo === 'COMPLETADA' ? 'bg-green-100 text-green-700'
+            : evento.estado_efectivo === 'VENCIDA' || evento.estado_efectivo === 'DEMORADA' ? 'bg-fat-bordo-100 text-fat-bordo-700'
+            : evento.estado_efectivo === 'OMITIDA' ? 'bg-gray-100 text-gray-500'
+            : 'bg-yellow-100 text-yellow-700'
+          }`}>{evento.estado_efectivo}</span>
+        )}
       </div>
 
       {evento.estado === 'PENDIENTE' && evento.tipo === 'TAREA' && (
@@ -704,7 +707,7 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, sucursalEnVista, on
           titulo: form.titulo,
           descripcion: form.descripcion || null,
           responsable_user_id: form.responsable_user_id || null,
-          fecha_hora: `${form.fecha}T${form.hora}:00`,
+          fecha_hora: `${form.fecha}T00:00:00`,
           icono: form.icono || ICONO_EVENTO_ESPECIAL_DEFAULT,
         });
       } else if (form.tipo === 'TAREA' && form.tareaRecurrencia !== 'NINGUNA') {
@@ -912,10 +915,7 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, sucursalEnVista, on
             )}
           </div>
         ) : form.tipo === 'EVENTO_ESPECIAL' ? (
-          <div className="grid grid-cols-2 gap-3">
-            <Campo label="Fecha" type="date" required value={form.fecha} onChange={(e) => setForm({ ...form, fecha: e.target.value })} />
-            <Campo label="Hora" type="time" required value={form.hora} onChange={(e) => setForm({ ...form, hora: e.target.value })} />
-          </div>
+          <Campo label="Fecha" type="date" required value={form.fecha} onChange={(e) => setForm({ ...form, fecha: e.target.value })} />
         ) : (
           <>
             <div className="grid grid-cols-2 gap-3">
