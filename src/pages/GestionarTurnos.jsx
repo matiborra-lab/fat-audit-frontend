@@ -329,7 +329,7 @@ export default function GestionarTurnos() {
   function CeldaTurno({ fecha, turnoTipo }) {
     const claveFecha = aClaveDia(fecha);
     return (
-      <div className="border border-gray-100 rounded-lg p-1 sm:p-1.5 bg-gray-50/50">
+      <div className="border border-gray-100 rounded-lg p-1 sm:p-1.5 bg-gray-50/50 min-w-0 overflow-hidden">
         <div className="flex items-center justify-between mb-1">
           <span className="text-[9px] sm:text-[10px] font-semibold text-gray-500 uppercase truncate">{TURNO_LABEL[turnoTipo]}</span>
           <button onClick={() => abrirAlta(claveFecha, turnoTipo)} className="text-fat-bordo-600 hover:bg-fat-bordo-50 rounded w-4 h-4 leading-none text-sm font-bold shrink-0">+</button>
@@ -341,19 +341,19 @@ export default function GestionarTurnos() {
               <div key={p} className="text-[9px] sm:text-[10px]">
                 <span className="text-gray-400">{PUESTO_LABEL[p]} ({lista.length})</span>
                 {lista.length > 0 && (
-                  <div className="flex flex-wrap gap-0.5 mt-0.5">
+                  <div className="flex flex-wrap gap-0.5 mt-0.5 min-w-0">
                     {lista.map((t) => (
                       <span
                         key={t.id}
-                        title={t.asignacion_confirmada ? 'Asignado' : 'Pendiente de confirmar'}
-                        className={`inline-flex items-center gap-0.5 px-1 py-0.5 rounded ${
+                        title={`${t.responsable_nombre || ''} · ${t.asignacion_confirmada ? 'Asignado' : 'Pendiente de confirmar'}`}
+                        className={`inline-flex items-center gap-0.5 px-1 py-0.5 rounded max-w-full min-w-0 ${
                           t.solicitud_revision_estado === 'PENDIENTE' ? 'bg-yellow-100 text-yellow-700'
                           : !t.asignacion_confirmada ? 'bg-gray-100 text-gray-500'
                           : 'bg-white border border-gray-200 text-gray-700'
                         }`}
                       >
-                        {!t.asignacion_confirmada ? '🕒 ' : '✓ '}{t.responsable_nombre?.split(' ')[0] || '—'}
-                        <button onClick={() => eliminarTurno(t.id)} className="text-gray-300 hover:text-fat-bordo-600 leading-none">&times;</button>
+                        <span className="truncate">{!t.asignacion_confirmada ? '🕒 ' : '✓ '}{t.responsable_nombre?.split(' ')[0] || '—'}</span>
+                        <button onClick={() => eliminarTurno(t.id)} className="text-gray-300 hover:text-fat-bordo-600 leading-none shrink-0">&times;</button>
                       </span>
                     ))}
                   </div>
@@ -527,7 +527,7 @@ export default function GestionarTurnos() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Días de la semana</label>
                 <SelectorDias opciones={DIAS_SEMANA_UI} seleccionados={formProgramar.diasSemana} onChange={(v) => setFormProgramar({ ...formProgramar, diasSemana: v })} />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Campo label="Desde" type="date" required value={formProgramar.fechaDesde} onChange={(e) => setFormProgramar({ ...formProgramar, fechaDesde: e.target.value })} />
                 <Campo label="Hasta (opcional)" type="date" value={formProgramar.fechaHasta} onChange={(e) => setFormProgramar({ ...formProgramar, fechaHasta: e.target.value })} />
               </div>
