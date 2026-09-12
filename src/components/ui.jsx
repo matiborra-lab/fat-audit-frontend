@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 export function Campo({ label, ...props }) {
   return (
@@ -238,6 +238,59 @@ export function SelectorEmoji({ opciones = BANCO_EMOJIS, valor, onChange, label 
           </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+// Dropdown de checkboxes - filtro/selector multi-sucursal, con "Todas las
+// sucursales" como opción de otro nivel (separada del resto) que tilda/
+// destilda todas las individuales de una. `seleccionadas` es tri-estado:
+// null = todas las sucursales; un array (incluso vacío) = selección manual
+// explícita, así "todas" y "ninguna elegida todavía" son estados distintos
+// y se puede destildar "Todas" sin que sea un no-op. Compartido entre
+// Calendario (filtro) y Tareas (filtro admin de historial).
+export function SelectorSucursalesMultiple({ sucursales, seleccionadas, onChange }) {
+  const [abierto, setAbierto] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    function alClickAfuera(e) { if (ref.current && !ref.current.contains(e.target)) setAbierto(false); }
+    document.addEventListener('mousedown', alClickAfuera);
+    return () => document.removeEventListener('mousedown', alClickAfuera);
+  }, []);
+  const todasTildadas = seleccionadas === null;
+  function alternarTodas() {
+    onChange(todasTildadas ? [] : null);
+  }
+  function alternar(id) {
+    const base = todasTildadas ? sucursales.map((s) => s.id) : seleccionadas;
+    onChange(base.includes(id) ? base.filter((v) => v !== id) : [...base, id]);
+  }
+  const etiqueta = todasTildadas
+    ? 'Todas las sucursales'
+    : seleccionadas.length === 0
+      ? 'Ninguna sucursal'
+      : sucursales.filter((s) => seleccionadas.includes(s.id)).map((s) => s.nombre).join(', ');
+  return (
+    <div ref={ref} className="relative">
+      <button type="button" onClick={() => setAbierto((a) => !a)} className="rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white text-gray-700 max-w-[220px] truncate">
+        {etiqueta}
+      </button>
+      {abierto && (
+        <div className="absolute z-20 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-2 min-w-[200px]">
+          <label className="flex items-center gap-2 text-sm font-medium text-gray-800 px-1 py-1.5 hover:bg-gray-50 rounded cursor-pointer border-b border-gray-100 mb-1">
+            <input type="checkbox" checked={todasTildadas} onChange={alternarTodas} />
+            Todas las sucursales
+          </label>
+          <div className="space-y-1">
+            {sucursales.map((s) => (
+              <label key={s.id} className="flex items-center gap-2 text-sm text-gray-700 px-1 py-0.5 hover:bg-gray-50 rounded cursor-pointer">
+                <input type="checkbox" checked={todasTildadas || seleccionadas.includes(s.id)} onChange={() => alternar(s.id)} />
+                {s.nombre}
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

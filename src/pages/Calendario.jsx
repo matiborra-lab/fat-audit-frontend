@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
-import { Tarjeta, Campo, Select, Boton, Modal, Toast, Cargando, BotonCamara, SelectorEmoji } from '../components/ui';
+import { Tarjeta, Campo, Select, Boton, Modal, Toast, Cargando, BotonCamara, SelectorEmoji, SelectorSucursalesMultiple } from '../components/ui';
 import BuscadorResponsable from '../components/BuscadorResponsable';
 import { esHallazgo } from '../utils/hallazgos';
 
@@ -126,60 +126,6 @@ function SelectorTiposMultiple({ seleccionados, onChange }) {
               {t.label}
             </label>
           ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// Dropdown de checkboxes - filtro/selector multi-sucursal, con "Todas las
-// sucursales" como opción de otro nivel (separada del resto) que tilda/
-// destilda todas las individuales de una - mismo patrón visual que
-// SelectorTiposMultiple. `seleccionadas` es tri-estado: null = todas las
-// sucursales; un array (incluso vacío) = selección manual explícita, así
-// "todas" y "ninguna elegida todavía" son estados distintos y se puede
-// destildar "Todas" sin que sea un no-op (antes [] representaba ambos casos
-// a la vez, por eso tildar "Todas" de nuevo no hacía nada).
-function SelectorSucursalesMultiple({ sucursales, seleccionadas, onChange }) {
-  const [abierto, setAbierto] = useState(false);
-  const ref = useRef(null);
-  useEffect(() => {
-    function alClickAfuera(e) { if (ref.current && !ref.current.contains(e.target)) setAbierto(false); }
-    document.addEventListener('mousedown', alClickAfuera);
-    return () => document.removeEventListener('mousedown', alClickAfuera);
-  }, []);
-  const todasTildadas = seleccionadas === null;
-  function alternarTodas() {
-    onChange(todasTildadas ? [] : null);
-  }
-  function alternar(id) {
-    const base = todasTildadas ? sucursales.map((s) => s.id) : seleccionadas;
-    onChange(base.includes(id) ? base.filter((v) => v !== id) : [...base, id]);
-  }
-  const etiqueta = todasTildadas
-    ? 'Todas las sucursales'
-    : seleccionadas.length === 0
-      ? 'Ninguna sucursal'
-      : sucursales.filter((s) => seleccionadas.includes(s.id)).map((s) => s.nombre).join(', ');
-  return (
-    <div ref={ref} className="relative">
-      <button type="button" onClick={() => setAbierto((a) => !a)} className="rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white text-gray-700 max-w-[220px] truncate">
-        {etiqueta}
-      </button>
-      {abierto && (
-        <div className="absolute z-20 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-2 min-w-[200px]">
-          <label className="flex items-center gap-2 text-sm font-medium text-gray-800 px-1 py-1.5 hover:bg-gray-50 rounded cursor-pointer border-b border-gray-100 mb-1">
-            <input type="checkbox" checked={todasTildadas} onChange={alternarTodas} />
-            Todas las sucursales
-          </label>
-          <div className="space-y-1">
-            {sucursales.map((s) => (
-              <label key={s.id} className="flex items-center gap-2 text-sm text-gray-700 px-1 py-0.5 hover:bg-gray-50 rounded cursor-pointer">
-                <input type="checkbox" checked={todasTildadas || seleccionadas.includes(s.id)} onChange={() => alternar(s.id)} />
-                {s.nombre}
-              </label>
-            ))}
-          </div>
         </div>
       )}
     </div>
