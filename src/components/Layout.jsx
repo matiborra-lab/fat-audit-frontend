@@ -107,7 +107,7 @@ function CampanaNotificaciones({ abrirHaciaArriba = false }) {
             <button key={n.id} onClick={() => marcarLeida(n)} className={`w-full text-left px-3 py-2.5 border-b border-gray-50 last:border-0 hover:bg-gray-50 ${!n.leida_en ? 'bg-fat-bordo-50/40' : ''}`}>
               <p className="text-sm font-medium text-gray-900">{n.titulo}</p>
               {n.cuerpo && <p className="text-xs text-gray-500 mt-0.5">{n.cuerpo}</p>}
-              <p className="text-[10px] text-gray-400 mt-1">{new Date(n.creado_en).toLocaleString('es-AR')}</p>
+              <p className="text-[10px] text-gray-400 mt-1">{new Date(n.creado_en).toLocaleString('es-AR', { hour12: false })}</p>
             </button>
           ))}
           {estadoPush !== 'no_soportado' && (

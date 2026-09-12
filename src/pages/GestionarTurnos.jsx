@@ -421,7 +421,7 @@ export default function GestionarTurnos() {
                 {solicitudes.map((s) => (
                   <div key={s.id} className="text-sm bg-white rounded-lg border border-yellow-200 p-2.5">
                     <p className="font-medium text-gray-900">{s.responsable_nombre} · {PUESTO_LABEL[s.puesto] || s.puesto}</p>
-                    <p className="text-xs text-gray-500">{new Date(s.fecha_hora).toLocaleString('es-AR')}</p>
+                    <p className="text-xs text-gray-500">{new Date(s.fecha_hora).toLocaleString('es-AR', { hour12: false })}</p>
                     <p className="text-xs text-gray-600 italic mt-1">"{s.solicitud_revision_motivo}"</p>
                     <div className="flex items-center gap-3 mt-2">
                       <div className="flex-1">

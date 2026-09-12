@@ -131,7 +131,7 @@ export default function HistorialDetalle() {
     <div className="space-y-6">
       <div>
         <h1 className="text-xl font-semibold text-gray-900">{run.sucursal_nombre || 'Auditoría'}</h1>
-        <p className="text-sm text-gray-500">{run.tipo} · {new Date(run.creado_en).toLocaleString('es-AR')}</p>
+        <p className="text-sm text-gray-500">{run.tipo} · {new Date(run.creado_en).toLocaleString('es-AR', { hour12: false })}</p>
       </div>
 
       <Tarjeta className="p-4 flex flex-wrap items-center gap-4">

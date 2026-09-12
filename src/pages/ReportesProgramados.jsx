@@ -130,7 +130,7 @@ export default function ReportesProgramados() {
                 <p className="text-sm font-medium text-gray-900 truncate">{r.nombre}</p>
                 <p className="text-xs text-gray-400 truncate">
                   {r.sucursal_nombre || 'Todas las sucursales'} · {cuando(r)} · {r.destinatarios.length} destinatario(s)
-                  {r.ultimo_envio_en && ` · último envío ${new Date(r.ultimo_envio_en).toLocaleString('es-AR')}`}
+                  {r.ultimo_envio_en && ` · último envío ${new Date(r.ultimo_envio_en).toLocaleString('es-AR', { hour12: false })}`}
                 </p>
               </button>
               <div className="flex items-center gap-2 shrink-0">
