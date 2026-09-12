@@ -17,14 +17,19 @@ const TIPO_COLOR = {
   TURNO: 'bg-purple-100 text-purple-700',
   // Feriados/promos - estilo distintivo (pulso) para que resalte del resto.
   EVENTO_ESPECIAL: 'bg-pink-100 text-pink-700 animate-pulse',
+  // Feriados nacionales (ArgentinaDatos) - color e ícono propio, ver TIPO_ICONO.
+  FERIADO: 'bg-sky-100 text-sky-800',
 };
-const TIPO_LABEL = { AUDITORIA: 'Auditoría de marca', AUDITORIA_INTERNA: 'Auditoría interna', SEGUIMIENTO: 'Seguimiento', TAREA: 'Tarea', TURNO: 'Turno', EVENTO_ESPECIAL: 'Evento especial' };
+const TIPO_ICONO = { FERIADO: '🇦🇷' };
+const FERIADO_TIPO_LABEL = { inamovible: 'Feriado nacional', trasladable: 'Feriado trasladable', puente: 'Puente turístico' };
+const TIPO_LABEL = { AUDITORIA: 'Auditoría de marca', AUDITORIA_INTERNA: 'Auditoría interna', SEGUIMIENTO: 'Seguimiento', TAREA: 'Tarea', TURNO: 'Turno', EVENTO_ESPECIAL: 'Evento especial', FERIADO: 'Feriado' };
 const TIPOS_FILTRO = [
   { valor: 'AUDITORIA', label: 'Auditoría' },
   { valor: 'SEGUIMIENTO', label: 'Seguimiento' },
   { valor: 'TAREA', label: 'Tarea' },
   { valor: 'TURNO', label: 'Turno' },
   { valor: 'EVENTO_ESPECIAL', label: 'Evento especial' },
+  { valor: 'FERIADO', label: 'Feriado' },
 ];
 const MOTIVOS_PRESET = ['Baja por malestar', 'Problemas personales', 'Evento especial'];
 // Lun..Dom en la UI -> Date#getDay() (0=domingo..6=sábado), igual que el resto de la app (ver GestionarTurnos).
@@ -206,6 +211,24 @@ export default function Calendario() {
   }, [sucursalIdVista]);
   const climaPorDia = useMemo(() => new Map(clima.map((c) => [c.fecha, c])), [clima]);
 
+  // Feriados: nacionales, no de una sucursal - se ven siempre (incluida
+  // "todas las sucursales"), respetando el filtro de tipos como cualquier otro.
+  const [feriados, setFeriados] = useState([]);
+  useEffect(() => {
+    const desde = aClaveDia(diasVisibles[0]);
+    const hasta = aClaveDia(diasVisibles[diasVisibles.length - 1]);
+    api.get(`/api/feriados?desde=${desde}&hasta=${hasta}`).then(setFeriados).catch(() => setFeriados([]));
+  }, [vista, ancla.getFullYear(), ancla.getMonth(), ancla.getDate()]);
+  const feriadosVisibles = filtroTipos.length === 0 || filtroTipos.includes('FERIADO') ? feriados : [];
+  const feriadosPorDia = useMemo(() => {
+    const mapa = new Map();
+    for (const f of feriadosVisibles) {
+      if (!mapa.has(f.fecha)) mapa.set(f.fecha, []);
+      mapa.get(f.fecha).push(f);
+    }
+    return mapa;
+  }, [feriadosVisibles]);
+
   function recargar() {
     const desde = aClaveDia(diasVisibles[0]);
     const hasta = aClaveDia(diasVisibles[diasVisibles.length - 1]);
@@ -241,6 +264,7 @@ export default function Calendario() {
   if (!eventos) return <Cargando />;
 
   const eventosDelDiaSeleccionado = diaSeleccionado ? eventosPorDia.get(aClaveDia(diaSeleccionado)) || [] : [];
+  const feriadosDelDiaSeleccionado = diaSeleccionado ? feriadosPorDia.get(aClaveDia(diaSeleccionado)) || [] : [];
 
   return (
     <div className="space-y-4">
@@ -281,6 +305,7 @@ export default function Calendario() {
         {diasVisibles.map((d, i) => {
           const delMes = vista === 'MES' ? d.getMonth() === ancla.getMonth() : true;
           const esHoy = aClaveDia(d) === aClaveDia(hoy);
+          const feriadosDia = feriadosPorDia.get(aClaveDia(d)) || [];
           const eventosDia = eventosPorDia.get(aClaveDia(d)) || [];
           const maxVisibles = vista === 'SEMANA' ? 6 : 2;
           const climaDiaRaw = climaPorDia.get(aClaveDia(d));
@@ -302,6 +327,11 @@ export default function Calendario() {
                 )}
               </div>
               <div className="mt-1 space-y-0.5">
+                {feriadosDia.map((f) => (
+                  <p key={`feriado-${f.fecha}-${f.nombre}`} className={`text-[10px] px-1 py-0.5 rounded truncate ${TIPO_COLOR.FERIADO}`} title={`${FERIADO_TIPO_LABEL[f.tipo] || 'Feriado'}: ${f.nombre}`}>
+                    {TIPO_ICONO.FERIADO} {f.nombre}
+                  </p>
+                ))}
                 {eventosDia.slice(0, maxVisibles).map((e) => (
                   <p key={e.id} className={`text-[10px] px-1 py-0.5 rounded truncate ${colorEvento(e)}`} title={etiquetaEvento(e)}>{e.titulo}</p>
                 ))}
@@ -316,6 +346,7 @@ export default function Calendario() {
         <Modal titulo={diaSeleccionado.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })} onClose={() => setDiaSeleccionado(null)}>
           <DiaDetalle
             eventos={eventosDelDiaSeleccionado}
+            feriados={feriadosDelDiaSeleccionado}
             usuario={usuario}
             onCambio={() => { recargar(); setToast('Actualizado'); }}
             onIniciarRun={(runId) => navigate(`/ejecucion/${runId}`)}
@@ -349,10 +380,16 @@ function puedeGestionarEvento(usuario, evento) {
   return false;
 }
 
-function DiaDetalle({ eventos, usuario, onCambio, onIniciarRun }) {
-  if (eventos.length === 0) return <p className="text-sm text-gray-400">No hay eventos este día.</p>;
+function DiaDetalle({ eventos, feriados, usuario, onCambio, onIniciarRun }) {
+  if (eventos.length === 0 && feriados.length === 0) return <p className="text-sm text-gray-400">No hay eventos este día.</p>;
   return (
     <div className="space-y-3">
+      {feriados.map((f) => (
+        <div key={`feriado-${f.fecha}-${f.nombre}`} className={`rounded-lg p-3 ${TIPO_COLOR.FERIADO}`}>
+          <span className="text-[10px] font-medium uppercase opacity-70">{TIPO_ICONO.FERIADO} {FERIADO_TIPO_LABEL[f.tipo] || 'Feriado'}</span>
+          <p className="text-sm font-medium mt-0.5">{f.nombre}</p>
+        </div>
+      ))}
       {eventos.map((e) => (
         <EventoItem key={e.id} evento={e} usuario={usuario} puedeEditar={puedeGestionarEvento(usuario, e)} onCambio={onCambio} onIniciarRun={onIniciarRun} />
       ))}

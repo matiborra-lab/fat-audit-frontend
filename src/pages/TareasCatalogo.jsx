@@ -11,9 +11,23 @@ export default function TareasCatalogo() {
   const [tareaEnEdicion, setTareaEnEdicion] = useState(null); // { tipoTareaId, tarea | null }
   const [toast, setToast] = useState('');
   const [error, setError] = useState('');
+  const [actualizandoFeriados, setActualizandoFeriados] = useState(false);
 
   function recargar() {
     api.get('/api/tipos-tarea').then(setTipos);
+  }
+
+  async function actualizarFeriados() {
+    setActualizandoFeriados(true);
+    setError('');
+    try {
+      const r = await api.post('/api/feriados/actualizar', { anio: new Date().getFullYear() });
+      setToast(`Feriados ${r.anio} actualizados (${r.actualizados})`);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setActualizandoFeriados(false);
+    }
   }
   useEffect(() => {
     recargar();
@@ -47,6 +61,14 @@ export default function TareasCatalogo() {
   return (
     <div className="space-y-4">
       <Leyenda>Los tipos y tareas activos son los que ven Admin/Auditor/Gerente al programar una tarea desde el calendario, filtrados por sucursal.</Leyenda>
+
+      <Tarjeta className="p-4 flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-medium text-gray-900">Feriados nacionales</p>
+          <p className="text-xs text-gray-400">Se actualizan solos al empezar cada año - esto fuerza un refresco manual desde ArgentinaDatos.</p>
+        </div>
+        <Boton ancho="w-auto" variante="secundario" cargando={actualizandoFeriados} onClick={actualizarFeriados}>Actualizar feriados</Boton>
+      </Tarjeta>
 
       <Tarjeta className="p-4">
         <form onSubmit={crearTipo} className="flex gap-2 items-end">
