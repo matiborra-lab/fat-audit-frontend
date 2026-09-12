@@ -4,6 +4,7 @@ import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { Tarjeta, Campo, Select, Boton, Modal, Toast, Cargando, BotonCamara } from '../components/ui';
 import BuscadorResponsable from '../components/BuscadorResponsable';
+import { esHallazgo } from '../utils/hallazgos';
 
 const DIAS_SEMANA = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 // El color de AUDITORIA distingue de marca vs interna una vez que se conoce
@@ -557,12 +558,28 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, onClose, onCreado }
     }
   }
 
+  if (form.tipo === 'SEGUIMIENTO') {
+    return (
+      <Modal titulo="Nuevo evento" onClose={onClose} ancho="max-w-lg">
+        <div className="space-y-3">
+          <Select label="Tipo" value={form.tipo} onChange={(e) => setForm({ ...form, tipo: e.target.value })}>
+            <option value="AUDITORIA">Auditoría{esGerente ? ' interna' : ''}</option>
+            <option value="SEGUIMIENTO">Seguimiento</option>
+            <option value="TAREA">Tarea rutinaria</option>
+            {!esGerente && <option value="EVENTO_ESPECIAL">Evento especial</option>}
+          </Select>
+          <FormSeguimiento sucursales={sucursales} usuario={usuario} esGerente={esGerente} onCreado={onCreado} />
+        </div>
+      </Modal>
+    );
+  }
+
   return (
     <Modal titulo="Nuevo evento" onClose={onClose} ancho="max-w-lg">
       <form onSubmit={crear} className="space-y-3">
         <Select label="Tipo" value={form.tipo} onChange={(e) => setForm({ ...form, tipo: e.target.value })}>
           <option value="AUDITORIA">Auditoría{esGerente ? ' interna' : ''}</option>
-          {!esGerente && <option value="SEGUIMIENTO">Seguimiento</option>}
+          <option value="SEGUIMIENTO">Seguimiento</option>
           <option value="TAREA">Tarea rutinaria</option>
           {!esGerente && <option value="EVENTO_ESPECIAL">Evento especial</option>}
         </Select>
@@ -589,7 +606,7 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, onClose, onCreado }
           </div>
         )}
 
-        {(form.tipo === 'AUDITORIA' || form.tipo === 'SEGUIMIENTO') && (
+        {form.tipo === 'AUDITORIA' && (
           <Select label="Plantilla" required value={form.template_id} onChange={(e) => setForm({ ...form, template_id: e.target.value })}>
             <option value="">Elegí una plantilla</option>
             {plantillas.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
@@ -705,5 +722,130 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, onClose, onCreado }
         <Boton type="submit" cargando={guardando}>Crear</Boton>
       </form>
     </Modal>
+  );
+}
+
+// Seguimiento programado desde el calendario: no sale de una plantilla sino
+// de los hallazgos de la última auditoría de MARCA completada de la
+// sucursal (mismo criterio que "Generar auditoría de seguimiento" en
+// HistorialDetalle.jsx) - por eso vive aparte del resto de ModalNuevoEvento,
+// con su propio submit directo a POST /api/runs/:id/seguimiento (no crea el
+// evento vía POST /api/calendario). Paso 1: sucursal ya resuelta ->
+// responsable + fecha/hora. Paso 2: elegir los hallazgos (preseleccionados).
+function FormSeguimiento({ sucursales, usuario, esGerente, onCreado }) {
+  const [sucursalId, setSucursalId] = useState(esGerente ? usuario.sucursal_id : '');
+  const [ultimaMarca, setUltimaMarca] = useState(undefined); // undefined = sin cargar, null = no hay
+  const [cargandoMarca, setCargandoMarca] = useState(false);
+  const [errorMarca, setErrorMarca] = useState('');
+  const [paso, setPaso] = useState(1);
+  const [responsableId, setResponsableId] = useState(esGerente ? usuario.id : '');
+  const [responsableNombre, setResponsableNombre] = useState(esGerente ? (usuario.nombre || usuario.email) : '');
+  const [fecha, setFecha] = useState('');
+  const [hora, setHora] = useState('10:00');
+  const [seleccion, setSeleccion] = useState(new Set());
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!sucursalId) { setUltimaMarca(undefined); return; }
+    setCargandoMarca(true);
+    setErrorMarca('');
+    setUltimaMarca(undefined);
+    setPaso(1);
+    api.get(`/api/runs/ultima-marca?sucursal_id=${sucursalId}`)
+      .then(setUltimaMarca)
+      .catch((e) => { setUltimaMarca(null); setErrorMarca(e.message); })
+      .finally(() => setCargandoMarca(false));
+  }, [sucursalId]);
+
+  const selectorSucursal = !esGerente && (
+    <Select label="Sucursal" required value={sucursalId} onChange={(e) => setSucursalId(e.target.value)}>
+      <option value="">Elegí una sucursal</option>
+      {sucursales.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+    </Select>
+  );
+
+  if (!sucursalId) return <div className="space-y-3">{selectorSucursal}</div>;
+  if (cargandoMarca) return <div className="space-y-3">{selectorSucursal}<p className="text-sm text-gray-400">Buscando la última auditoría de marca…</p></div>;
+  if (!ultimaMarca) return <div className="space-y-3">{selectorSucursal}<p className="text-sm text-fat-bordo-600">{errorMarca}</p></div>;
+
+  function continuar() {
+    setError('');
+    if (!responsableId) { setError('Elegí un responsable'); return; }
+    if (!fecha) { setError('Elegí una fecha'); return; }
+    const estructura = ultimaMarca.estructura_snapshot;
+    const respuestaPorItem = new Map(ultimaMarca.respuestas.map((r) => [r.item_id, r]));
+    const propuestos = new Set(estructura.items.filter((item) => esHallazgo(item, respuestaPorItem.get(item.id))).map((i) => i.id));
+    setSeleccion(propuestos);
+    setPaso(2);
+  }
+
+  async function crearYProgramar() {
+    if (seleccion.size === 0) { setError('Elegí al menos un hallazgo'); return; }
+    setError('');
+    setGuardando(true);
+    try {
+      await api.post(`/api/runs/${ultimaMarca.id}/seguimiento`, {
+        item_ids: [...seleccion], responsable_user_id: responsableId,
+        fecha_hora: `${fecha}T${hora}:00`, notificar: true,
+      });
+      onCreado();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  if (paso === 1) {
+    return (
+      <div className="space-y-3">
+        {selectorSucursal}
+        <p className="text-xs text-gray-400">
+          Última auditoría de marca: <strong>{new Date(ultimaMarca.completada_en).toLocaleDateString('es-AR')}</strong> en {ultimaMarca.sucursal_nombre}.
+        </p>
+        <BuscadorResponsable
+          sucursalId={sucursalId} nombreValue={responsableNombre}
+          onChange={(id, u) => { setResponsableId(id); setResponsableNombre(u ? (u.nombre || u.email) : ''); }}
+        />
+        <div className="grid grid-cols-2 gap-3">
+          <Campo label="Fecha" type="date" required value={fecha} onChange={(e) => setFecha(e.target.value)} />
+          <Campo label="Hora" type="time" required value={hora} onChange={(e) => setHora(e.target.value)} />
+        </div>
+        {error && <p className="text-sm text-fat-bordo-600">{error}</p>}
+        <Boton type="button" onClick={continuar}>Continuar</Boton>
+      </div>
+    );
+  }
+
+  const estructura = ultimaMarca.estructura_snapshot;
+  const respuestaPorItem = new Map(ultimaMarca.respuestas.map((r) => [r.item_id, r]));
+  return (
+    <div className="space-y-3">
+      <p className="text-sm font-medium text-gray-900">{seleccion.size} hallazgo(s) elegido(s)</p>
+      <div className="max-h-72 overflow-y-auto border border-gray-100 rounded-lg divide-y divide-gray-100">
+        {estructura.items.map((item) => {
+          const marcado = seleccion.has(item.id);
+          return (
+            <label key={item.id} className={`flex items-start gap-2 px-3 py-2 text-sm cursor-pointer ${marcado ? 'bg-fat-bordo-50/40' : ''}`}>
+              <input
+                type="checkbox" className="mt-0.5" checked={marcado}
+                onChange={(e) => {
+                  const nuevo = new Set(seleccion);
+                  if (e.target.checked) nuevo.add(item.id); else nuevo.delete(item.id);
+                  setSeleccion(nuevo);
+                }}
+              />
+              <span className="flex-1">{item.texto} {item.critico && <span className="text-xs text-fat-bordo-600 font-medium">· crítico</span>}</span>
+            </label>
+          );
+        })}
+      </div>
+      {error && <p className="text-sm text-fat-bordo-600">{error}</p>}
+      <div className="flex gap-2">
+        <Boton ancho="w-auto" variante="secundario" onClick={() => setPaso(1)}>Volver a programación</Boton>
+        <Boton ancho="w-auto" cargando={guardando} onClick={crearYProgramar}>Crear y programar</Boton>
+      </div>
+    </div>
   );
 }

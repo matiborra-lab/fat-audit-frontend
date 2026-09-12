@@ -4,6 +4,7 @@ import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { Tarjeta, Campo, Boton, Toast, Puntaje, Resultado, Cargando, EtiquetaArea } from '../components/ui';
 import BuscadorResponsable from '../components/BuscadorResponsable';
+import { esHallazgo } from '../utils/hallazgos';
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -14,22 +15,6 @@ function valorLegible(item, valor) {
   if (item.tipo_respuesta === 'SI_NO') return valor === 'SI' || valor === true ? 'Sí' : 'No';
   if (item.tipo_respuesta === 'CHECKBOX') return valor ? 'Verificado' : 'Pendiente';
   return String(valor);
-}
-
-// El sistema propone (pre-selecciona) los items críticos o con un resultado
-// deficiente, para agilizar la elección del seguimiento - el admin/auditor
-// igual puede desmarcar o sumar cualquier otro a mano. OPCION_MULTIPLE/
-// NUMERO/TEXTO/FECHA no se auto-proponen (no hay forma genérica de saber si
-// "salió mal"), pero se pueden marcar igual.
-function esHallazgo(item, resp) {
-  if (item.critico) return true;
-  if (!resp || resp.no_aplica || resp.valor_json == null) return false;
-  const v = resp.valor_json;
-  if (item.tipo_respuesta === 'SI_NO') return !(v === 'SI' || v === true);
-  if (item.tipo_respuesta === 'CHECKBOX') return !v;
-  if (item.tipo_respuesta === 'ESCALA_5') return Number(v) <= 2;
-  if (item.tipo_respuesta === 'ESCALA_10') return Number(v) <= 5;
-  return false;
 }
 
 export default function HistorialDetalle() {
