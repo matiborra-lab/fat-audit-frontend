@@ -43,6 +43,19 @@ function etiquetaEvento(e) {
   return TIPO_LABEL[e.tipo];
 }
 
+// Íconos simplificados a partir del weather_code de Open-Meteo (WMO).
+function emojiClima(code) {
+  if (code === 0) return '☀️';
+  if (code === 1) return '🌤️';
+  if (code === 2) return '⛅';
+  if (code === 3) return '☁️';
+  if (code === 45 || code === 48) return '🌫️';
+  if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82)) return '🌧️';
+  if (code >= 71 && code <= 77) return '❄️';
+  if (code >= 95) return '⛈️';
+  return '';
+}
+
 function aClaveDia(d) {
   return d.toISOString().slice(0, 10);
 }
@@ -134,6 +147,16 @@ export default function Calendario() {
   const diasVisibles = vista === 'MES' ? grilla : semana;
   const puedeCrear = usuario.rol === 'ADMIN' || usuario.rol === 'AUDITOR' || usuario.rol === 'GERENTE';
   const veTodasSucursales = usuario.rol === 'ADMIN' || usuario.rol === 'AUDITOR';
+  // Clima: solo tiene sentido mostrarlo cuando se está viendo UNA sucursal
+  // puntual (Gerente/Colaborador siempre ven la suya; Admin/Auditor solo si
+  // filtraron una) - "todas las sucursales" no muestra clima.
+  const sucursalIdVista = veTodasSucursales ? (filtroSucursal || null) : usuario.sucursal_id;
+  const [clima, setClima] = useState([]);
+  useEffect(() => {
+    if (!sucursalIdVista) { setClima([]); return; }
+    api.get(`/api/sucursales/${sucursalIdVista}/clima`).then(setClima).catch(() => setClima([]));
+  }, [sucursalIdVista]);
+  const climaPorDia = useMemo(() => new Map(clima.map((c) => [c.fecha, c])), [clima]);
 
   function recargar() {
     const desde = aClaveDia(diasVisibles[0]);
@@ -215,15 +238,24 @@ export default function Calendario() {
           const esHoy = aClaveDia(d) === aClaveDia(hoy);
           const eventosDia = eventosPorDia.get(aClaveDia(d)) || [];
           const maxVisibles = vista === 'SEMANA' ? 6 : 2;
+          const climaDiaRaw = climaPorDia.get(aClaveDia(d));
+          const climaDia = climaDiaRaw?.temp_max != null ? climaDiaRaw : null;
           return (
             <button
               key={i}
               onClick={() => setDiaSeleccionado(d)}
               className={`bg-white text-left align-top hover:bg-gray-50 ${vista === 'SEMANA' ? 'min-h-[220px] p-2' : 'min-h-[84px] p-1.5'} ${!delMes ? 'opacity-40' : ''}`}
             >
-              <span className={`text-xs inline-flex items-center justify-center w-5 h-5 rounded-full ${esHoy ? 'bg-fat-bordo-500 text-white font-semibold' : 'text-gray-600'}`}>
-                {d.getDate()}
-              </span>
+              <div className="flex items-center justify-between gap-1">
+                <span className={`text-xs inline-flex items-center justify-center w-5 h-5 rounded-full shrink-0 ${esHoy ? 'bg-fat-bordo-500 text-white font-semibold' : 'text-gray-600'}`}>
+                  {d.getDate()}
+                </span>
+                {climaDia && (
+                  <span className="text-[9px] text-gray-400 truncate" title={`${Math.round(climaDia.temp_min)}° / ${Math.round(climaDia.temp_max)}°`}>
+                    {emojiClima(climaDia.weather_code)} {Math.round(climaDia.temp_max)}°
+                  </span>
+                )}
+              </div>
               <div className="mt-1 space-y-0.5">
                 {eventosDia.slice(0, maxVisibles).map((e) => (
                   <p key={e.id} className={`text-[10px] px-1 py-0.5 rounded truncate ${colorEvento(e)}`} title={etiquetaEvento(e)}>{e.titulo}</p>

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
-import { Tarjeta, Campo, Boton, Modal, Toast, Cargando } from '../components/ui';
+import { Tarjeta, Campo, Boton, Modal, Toast, Cargando, Leyenda } from '../components/ui';
 
 const PUESTO_LABEL = { COCINA: 'Cocina', CAJA: 'Caja', REFUERZO_COCINA: 'Refuerzo cocina' };
 const ROL_LABEL = { GERENTE: 'Gerente', COLABORADOR: 'Colaborador' };
@@ -184,7 +184,10 @@ export default function Sucursales() {
 
   function abrirEditar(s) {
     setSucursalEditar(s);
-    setFormEditar({ nombre: s.nombre, codigo: s.codigo || '', direccion: s.direccion || '', activo: s.activo });
+    setFormEditar({
+      nombre: s.nombre, codigo: s.codigo || '', direccion: s.direccion || '', activo: s.activo,
+      latitud: s.latitud ?? '', longitud: s.longitud ?? '',
+    });
   }
 
   async function guardarEditar(e) {
@@ -192,7 +195,11 @@ export default function Sucursales() {
     setError('');
     setGuardando(true);
     try {
-      await api.patch(`/api/sucursales/${sucursalEditar.id}`, formEditar);
+      await api.patch(`/api/sucursales/${sucursalEditar.id}`, {
+        ...formEditar,
+        latitud: formEditar.latitud === '' ? null : Number(formEditar.latitud),
+        longitud: formEditar.longitud === '' ? null : Number(formEditar.longitud),
+      });
       setSucursalEditar(null);
       setToast('Sucursal actualizada');
       recargar();
@@ -249,6 +256,13 @@ export default function Sucursales() {
             <Campo label="Nombre" required value={formEditar.nombre} onChange={(e) => setFormEditar({ ...formEditar, nombre: e.target.value })} autoFocus />
             <Campo label="Código (opcional)" value={formEditar.codigo} onChange={(e) => setFormEditar({ ...formEditar, codigo: e.target.value })} />
             <Campo label="Dirección (opcional)" value={formEditar.direccion} onChange={(e) => setFormEditar({ ...formEditar, direccion: e.target.value })} />
+            <div>
+              <Leyenda>Para mostrar el clima en el calendario de esta sucursal. En Google Maps, clic derecho sobre la ubicación y copiar las coordenadas.</Leyenda>
+              <div className="grid grid-cols-2 gap-3 mt-2">
+                <Campo label="Latitud (opcional)" type="number" step="any" value={formEditar.latitud} onChange={(e) => setFormEditar({ ...formEditar, latitud: e.target.value })} />
+                <Campo label="Longitud (opcional)" type="number" step="any" value={formEditar.longitud} onChange={(e) => setFormEditar({ ...formEditar, longitud: e.target.value })} />
+              </div>
+            </div>
             <label className="flex items-center gap-2 text-sm text-gray-600">
               <input type="checkbox" checked={formEditar.activo} onChange={(e) => setFormEditar({ ...formEditar, activo: e.target.checked })} />
               Sucursal activa
