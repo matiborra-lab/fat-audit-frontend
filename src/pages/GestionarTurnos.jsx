@@ -8,6 +8,8 @@ import BuscadorResponsable from '../components/BuscadorResponsable';
 const PUESTOS = ['COCINA', 'CAJA', 'REFUERZO_COCINA'];
 const PUESTO_LABEL = { COCINA: 'Cocina', CAJA: 'Caja', REFUERZO_COCINA: 'Refuerzo cocina' };
 const TURNO_LABEL = { DIURNO: 'Diurno', NOCTURNO: 'Nocturno' };
+const FERIADO_TIPO_LABEL = { inamovible: 'Feriado nacional', trasladable: 'Feriado trasladable', puente: 'Puente turístico' };
+const ICONO_EVENTO_ESPECIAL_DEFAULT = '🎉';
 // Lun..Dom en la UI -> Date#getDay() (0=domingo..6=sábado), que es lo que espera el backend.
 const DIAS_SEMANA_UI = [
   { label: 'Lun', valor: 1 }, { label: 'Mar', valor: 2 }, { label: 'Mié', valor: 3 },
@@ -88,6 +90,66 @@ export default function GestionarTurnos() {
     api.get(`/api/calendario?sucursal_id=${sucursalId}&tipo=TURNO&desde=${desde}&hasta=${hasta}`).then(setTurnos).catch(() => setTurnos([]));
   }
   useEffect(recargar, [sucursalId, vista, ancla.getMonth(), ancla.getFullYear(), ancla.getDate()]);
+
+  // Overlay de solo lectura (feriados/cumpleaños/eventos especiales) para que
+  // el gerente vea qué hay en cada día al gestionar turnos - mismas fuentes
+  // que el calendario, sin estado de pendiente (un evento especial no es una
+  // tarea que pueda quedar pendiente).
+  const [feriados, setFeriados] = useState([]);
+  useEffect(() => {
+    const desde = aClaveDia(diasVisibles[0]);
+    const hasta = aClaveDia(diasVisibles[diasVisibles.length - 1]);
+    api.get(`/api/feriados?desde=${desde}&hasta=${hasta}`).then(setFeriados).catch(() => setFeriados([]));
+  }, [vista, ancla.getMonth(), ancla.getFullYear(), ancla.getDate()]);
+  const feriadosPorDia = useMemo(() => {
+    const mapa = new Map();
+    for (const f of feriados) {
+      if (!mapa.has(f.fecha)) mapa.set(f.fecha, []);
+      mapa.get(f.fecha).push(f);
+    }
+    return mapa;
+  }, [feriados]);
+
+  const [cumpleanos, setCumpleanos] = useState([]);
+  useEffect(() => {
+    if (!sucursalId) { setCumpleanos([]); return; }
+    const anios = new Set([diasVisibles[0].getFullYear(), diasVisibles[diasVisibles.length - 1].getFullYear()]);
+    Promise.all([...anios].map((anio) => api.get(`/api/sucursales/${sucursalId}/cumpleanos?anio=${anio}`).catch(() => [])))
+      .then((listas) => setCumpleanos(listas.flat()));
+  }, [sucursalId, vista, ancla.getMonth(), ancla.getFullYear(), ancla.getDate()]);
+  const cumpleanosPorDia = useMemo(() => {
+    const mapa = new Map();
+    for (const c of cumpleanos) {
+      if (!mapa.has(c.fecha)) mapa.set(c.fecha, []);
+      mapa.get(c.fecha).push(c);
+    }
+    return mapa;
+  }, [cumpleanos]);
+
+  const [eventosEspeciales, setEventosEspeciales] = useState([]);
+  useEffect(() => {
+    if (!sucursalId) { setEventosEspeciales([]); return; }
+    const desde = aClaveDia(diasVisibles[0]);
+    const hasta = aClaveDia(diasVisibles[diasVisibles.length - 1]);
+    api.get(`/api/calendario?sucursal_id=${sucursalId}&tipo=EVENTO_ESPECIAL&desde=${desde}&hasta=${hasta}`).then(setEventosEspeciales).catch(() => setEventosEspeciales([]));
+  }, [sucursalId, vista, ancla.getMonth(), ancla.getFullYear(), ancla.getDate()]);
+  const eventosEspecialesPorDia = useMemo(() => {
+    const mapa = new Map();
+    for (const e of eventosEspeciales) {
+      const clave = e.fecha_hora.slice(0, 10);
+      if (!mapa.has(clave)) mapa.set(clave, []);
+      mapa.get(clave).push(e);
+    }
+    return mapa;
+  }, [eventosEspeciales]);
+
+  function novedadesDelDia(claveFecha) {
+    return {
+      feriados: feriadosPorDia.get(claveFecha) || [],
+      cumpleanos: cumpleanosPorDia.get(claveFecha) || [],
+      eventosEspeciales: eventosEspecialesPorDia.get(claveFecha) || [],
+    };
+  }
 
   const turnosPorDia = useMemo(() => {
     // clave = 'YYYY-MM-DD|DIURNO|COCINA'
@@ -231,6 +293,36 @@ export default function GestionarTurnos() {
     setAncla(new Date());
   }
 
+  // Chips compactos de solo lectura - sin acciones ni estado (ver
+  // novedadesDelDia): un feriado/cumpleaños/evento especial no se "gestiona"
+  // acá, solo informa al gerente qué hay ese día.
+  function NovedadesDia({ claveFecha, compacto }) {
+    const { feriados: f, cumpleanos: c, eventosEspeciales: e } = novedadesDelDia(claveFecha);
+    if (!f.length && !c.length && !e.length) return null;
+    return (
+      <div className={`flex flex-wrap gap-0.5 ${compacto ? 'mt-0.5' : 'mb-1'}`}>
+        {f.map((item) => (
+          <span key={`f-${item.fecha}-${item.nombre}`} title={`${FERIADO_TIPO_LABEL[item.tipo] || 'Feriado'}: ${item.nombre}`}
+            className="inline-flex items-center gap-0.5 text-[10px] bg-sky-100 text-sky-800 rounded px-1 py-0.5">
+            🇦🇷{!compacto && ` ${item.nombre}`}
+          </span>
+        ))}
+        {c.map((item) => (
+          <span key={`c-${item.usuario_id}`} title={`Cumpleaños de ${item.nombre || item.email}`}
+            className="inline-flex items-center gap-0.5 text-[10px] bg-fuchsia-100 text-fuchsia-800 rounded px-1 py-0.5">
+            🎁{!compacto && ` ${(item.nombre || item.email || '').split(' ')[0]}`}
+          </span>
+        ))}
+        {e.map((item) => (
+          <span key={`e-${item.id}`} title={item.titulo}
+            className="inline-flex items-center gap-0.5 text-[10px] bg-pink-100 text-pink-700 rounded px-1 py-0.5">
+            {item.icono || ICONO_EVENTO_ESPECIAL_DEFAULT}{!compacto && ` ${item.titulo}`}
+          </span>
+        ))}
+      </div>
+    );
+  }
+
   function CeldaTurno({ fecha, turnoTipo }) {
     const claveFecha = aClaveDia(fecha);
     const abierta = celdaAbierta?.fecha === claveFecha && celdaAbierta?.turnoTipo === turnoTipo;
@@ -370,6 +462,7 @@ export default function GestionarTurnos() {
                     <p className="text-xs font-medium text-gray-700 text-center mb-1">
                       {d.toLocaleDateString('es-AR', { weekday: 'short', day: '2-digit' })}
                     </p>
+                    <NovedadesDia claveFecha={aClaveDia(d)} />
                     <div className="space-y-1.5">
                       <CeldaTurno fecha={d} turnoTipo="DIURNO" />
                       <CeldaTurno fecha={d} turnoTipo="NOCTURNO" />
@@ -394,6 +487,7 @@ export default function GestionarTurnos() {
                       className={`bg-white min-h-[64px] p-1.5 text-left hover:bg-gray-50 ${!delMes ? 'opacity-40' : ''}`}
                     >
                       <span className="text-xs text-gray-600">{d.getDate()}</span>
+                      <NovedadesDia claveFecha={aClaveDia(d)} compacto />
                       {(totales.DIURNO > 0 || totales.NOCTURNO > 0) && (
                         <div className="mt-1 space-y-0.5">
                           {totales.DIURNO > 0 && <p className="text-[10px] bg-fat-amarillo-100 text-fat-amarillo-800 rounded px-1">D: {totales.DIURNO}</p>}
