@@ -29,6 +29,7 @@ export default function Usuarios() {
   const [guardando, setGuardando] = useState(false);
   const [confirmandoReset, setConfirmandoReset] = useState(false);
   const [reseteando, setReseteando] = useState(false);
+  const [eliminando, setEliminando] = useState(null); // usuario a confirmar
 
   function recargar() {
     const params = new URLSearchParams();
@@ -68,7 +69,7 @@ export default function Usuarios() {
     setError('');
     setGuardando(true);
     try {
-      const body = { nombre: formEdit.nombre, usuario: formEdit.usuario || null };
+      const body = { nombre: formEdit.nombre, usuario: formEdit.usuario || null, email: formEdit.email };
       if (esGerente) {
         if (editando.rol === 'COLABORADOR') { body.puesto = formEdit.puesto; body.fecha_nacimiento = formEdit.fecha_nacimiento || null; }
       } else {
@@ -110,7 +111,7 @@ export default function Usuarios() {
   function abrirEdicion(u) {
     setError('');
     setConfirmandoReset(false);
-    setFormEdit({ nombre: u.nombre || '', usuario: u.usuario || '', puesto: u.puesto || '', rol: u.rol, sucursal_id: u.sucursal_id || '', fecha_nacimiento: u.fecha_nacimiento || '' });
+    setFormEdit({ email: u.email || '', nombre: u.nombre || '', usuario: u.usuario || '', puesto: u.puesto || '', rol: u.rol, sucursal_id: u.sucursal_id || '', fecha_nacimiento: u.fecha_nacimiento || '' });
     setEditando(u);
   }
 
@@ -142,7 +143,7 @@ export default function Usuarios() {
           {lista.map((u) => (
             <div key={u.id} className="px-4 py-3 flex items-center justify-between gap-3">
               <button className="min-w-0 text-left" onClick={() => abrirEdicion(u)}>
-                <p className="text-sm font-medium text-gray-900 truncate">{u.nombre || u.email}</p>
+                <p className="text-sm font-medium text-gray-900 truncate">{u.nombre || u.email} {!u.activo && <span className="text-xs text-gray-400">(eliminado)</span>}</p>
                 <p className="text-xs text-gray-400 truncate">
                   {u.usuario ? `@${u.usuario} · ` : ''}{u.email} · {ROL_LABEL[u.rol]}{u.puesto ? ` · ${PUESTO_LABEL[u.puesto]}` : ''}{u.sucursal_nombre ? ` · ${u.sucursal_nombre}` : ''}
                   {!u.clave_definida && ' · invitación pendiente'}
@@ -150,10 +151,10 @@ export default function Usuarios() {
                 <p className="text-xs text-gray-300 truncate">Última actividad: {formatearFecha(u.ultima_actividad_en)}</p>
               </button>
               <button
-                onClick={() => cambiarActivo(u)}
-                className={`text-xs shrink-0 px-2.5 py-1 rounded-full font-medium ${u.activo ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+                onClick={() => (u.activo ? setEliminando(u) : cambiarActivo(u))}
+                className={`text-xs shrink-0 px-2.5 py-1 rounded-full font-medium ${u.activo ? 'bg-gray-100 text-gray-500 hover:bg-fat-bordo-100 hover:text-fat-bordo-700' : 'bg-gray-100 text-gray-500 hover:bg-green-100 hover:text-green-700'}`}
               >
-                {u.activo ? 'Activo' : 'Deshabilitado'}
+                {u.activo ? 'Eliminar' : 'Reactivar'}
               </button>
             </div>
           ))}
@@ -195,7 +196,8 @@ export default function Usuarios() {
       {editando && formEdit && (
         <Modal titulo="Editar usuario" onClose={() => setEditando(null)}>
           <form onSubmit={guardarEdicion} className="space-y-4">
-            <Campo label="Nombre" value={formEdit.nombre} onChange={(e) => setFormEdit({ ...formEdit, nombre: e.target.value })} autoFocus />
+            <Campo label="Email" type="email" required value={formEdit.email} onChange={(e) => setFormEdit({ ...formEdit, email: e.target.value })} autoFocus />
+            <Campo label="Nombre" value={formEdit.nombre} onChange={(e) => setFormEdit({ ...formEdit, nombre: e.target.value })} />
             <Campo label="Nombre de usuario" value={formEdit.usuario} onChange={(e) => setFormEdit({ ...formEdit, usuario: e.target.value })} />
             {!esGerente && (
               <Select label="Rol" value={formEdit.rol} onChange={(e) => setFormEdit({ ...formEdit, rol: e.target.value, sucursal_id: '' })}>
@@ -236,6 +238,19 @@ export default function Usuarios() {
                 </div>
               </div>
             )}
+          </div>
+        </Modal>
+      )}
+      {eliminando && (
+        <Modal titulo="Eliminar usuario" onClose={() => setEliminando(null)} ancho="max-w-sm">
+          <div className="space-y-3">
+            <p className="text-sm text-gray-600">
+              ¿Eliminar a <strong>{eliminando.nombre || eliminando.email}</strong>? Deja de aparecer en las listas y de poder loguearse, pero su nombre se conserva en el historial de tareas y auditorías. Se puede reactivar más adelante.
+            </p>
+            <div className="flex gap-2">
+              <Boton ancho="w-auto" variante="peligro" onClick={async () => { await cambiarActivo(eliminando); setEliminando(null); }}>Sí, eliminar</Boton>
+              <Boton ancho="w-auto" variante="secundario" onClick={() => setEliminando(null)}>Cancelar</Boton>
+            </div>
           </div>
         </Modal>
       )}
