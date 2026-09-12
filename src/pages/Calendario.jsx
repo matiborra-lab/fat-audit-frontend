@@ -113,6 +113,54 @@ function SelectorTiposMultiple({ seleccionados, onChange }) {
   );
 }
 
+// Dropdown de checkboxes - filtro/selector multi-sucursal, con "Todas las
+// sucursales" como opción de otro nivel (separada del resto) que tilda/
+// destilda todas las individuales de una - mismo patrón visual que
+// SelectorTiposMultiple. `seleccionadas` vacío = "todas".
+function SelectorSucursalesMultiple({ sucursales, seleccionadas, onChange }) {
+  const [abierto, setAbierto] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    function alClickAfuera(e) { if (ref.current && !ref.current.contains(e.target)) setAbierto(false); }
+    document.addEventListener('mousedown', alClickAfuera);
+    return () => document.removeEventListener('mousedown', alClickAfuera);
+  }, []);
+  const todasTildadas = seleccionadas.length === 0 || seleccionadas.length === sucursales.length;
+  function alternarTodas() {
+    onChange(todasTildadas ? [] : sucursales.map((s) => s.id));
+  }
+  function alternar(id) {
+    const base = todasTildadas ? sucursales.map((s) => s.id) : seleccionadas;
+    onChange(base.includes(id) ? base.filter((v) => v !== id) : [...base, id]);
+  }
+  const etiqueta = todasTildadas
+    ? 'Todas las sucursales'
+    : sucursales.filter((s) => seleccionadas.includes(s.id)).map((s) => s.nombre).join(', ');
+  return (
+    <div ref={ref} className="relative">
+      <button type="button" onClick={() => setAbierto((a) => !a)} className="rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white text-gray-700 max-w-[220px] truncate">
+        {etiqueta}
+      </button>
+      {abierto && (
+        <div className="absolute z-20 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-2 min-w-[200px]">
+          <label className="flex items-center gap-2 text-sm font-medium text-gray-800 px-1 py-1.5 hover:bg-gray-50 rounded cursor-pointer border-b border-gray-100 mb-1">
+            <input type="checkbox" checked={todasTildadas} onChange={alternarTodas} />
+            Todas las sucursales
+          </label>
+          <div className="space-y-1">
+            {sucursales.map((s) => (
+              <label key={s.id} className="flex items-center gap-2 text-sm text-gray-700 px-1 py-0.5 hover:bg-gray-50 rounded cursor-pointer">
+                <input type="checkbox" checked={todasTildadas || seleccionadas.includes(s.id)} onChange={() => alternar(s.id)} />
+                {s.nombre}
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Leyenda() {
   return (
     <div className="flex flex-wrap gap-x-4 gap-y-1.5">
@@ -135,7 +183,7 @@ export default function Calendario() {
   const [eventos, setEventos] = useState(null);
   const [sucursales, setSucursales] = useState([]);
   const [plantillas, setPlantillas] = useState([]);
-  const [filtroSucursal, setFiltroSucursal] = useState('');
+  const [filtroSucursales, setFiltroSucursales] = useState([]); // vacío = todas
   const [filtroTipos, setFiltroTipos] = useState([]);
   const [diaSeleccionado, setDiaSeleccionado] = useState(null);
   const [modalNuevo, setModalNuevo] = useState(false);
@@ -150,7 +198,7 @@ export default function Calendario() {
   // Clima: solo tiene sentido mostrarlo cuando se está viendo UNA sucursal
   // puntual (Gerente/Colaborador siempre ven la suya; Admin/Auditor solo si
   // filtraron una) - "todas las sucursales" no muestra clima.
-  const sucursalIdVista = veTodasSucursales ? (filtroSucursal || null) : usuario.sucursal_id;
+  const sucursalIdVista = veTodasSucursales ? (filtroSucursales.length === 1 ? filtroSucursales[0] : null) : usuario.sucursal_id;
   const [clima, setClima] = useState([]);
   useEffect(() => {
     if (!sucursalIdVista) { setClima([]); return; }
@@ -162,11 +210,11 @@ export default function Calendario() {
     const desde = aClaveDia(diasVisibles[0]);
     const hasta = aClaveDia(diasVisibles[diasVisibles.length - 1]);
     const params = new URLSearchParams({ desde, hasta });
-    if (filtroSucursal) params.set('sucursal_id', filtroSucursal);
+    if (filtroSucursales.length) params.set('sucursal_id', filtroSucursales.join(','));
     if (filtroTipos.length) params.set('tipo', filtroTipos.join(','));
     api.get(`/api/calendario?${params}`).then(setEventos).catch((e) => setError(e.message));
   }
-  useEffect(recargar, [vista, ancla.getFullYear(), ancla.getMonth(), ancla.getDate(), filtroSucursal, filtroTipos]);
+  useEffect(recargar, [vista, ancla.getFullYear(), ancla.getMonth(), ancla.getDate(), filtroSucursales, filtroTipos]);
 
   useEffect(() => {
     if (veTodasSucursales) api.get('/api/sucursales').then(setSucursales);
@@ -217,10 +265,7 @@ export default function Calendario() {
           <button onClick={() => setVista('SEMANA')} className={`px-3 py-1 ${vista === 'SEMANA' ? 'bg-fat-bordo-500 text-white' : 'bg-white text-gray-600'}`}>Semana</button>
         </div>
         {veTodasSucursales && (
-          <Select value={filtroSucursal} onChange={(e) => setFiltroSucursal(e.target.value)}>
-            <option value="">Todas las sucursales</option>
-            {sucursales.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
-          </Select>
+          <SelectorSucursalesMultiple sucursales={sucursales} seleccionadas={filtroSucursales} onChange={setFiltroSucursales} />
         )}
         <SelectorTiposMultiple seleccionados={filtroTipos} onChange={setFiltroTipos} />
       </div>
@@ -516,8 +561,8 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, onClose, onCreado }
     // Específico de TAREA:
     tareaModo: 'CATALOGO', tipoTareaId: '', tareaCatalogoId: '', tituloOtro: '', fotoRequerida: false,
     tareaRecurrencia: 'NINGUNA', diasSemana: [], diasMes: [], sinHora: false, fechaHasta: '',
-    // Específico de EVENTO_ESPECIAL:
-    todasSucursales: false,
+    // Específico de EVENTO_ESPECIAL (vacío = todas las sucursales):
+    sucursalesEspecialesIds: [],
   });
   const [tiposTarea, setTiposTarea] = useState([]);
   const [guardando, setGuardando] = useState(false);
@@ -540,12 +585,12 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, onClose, onCreado }
     try {
       if (form.tipo === 'EVENTO_ESPECIAL') {
         if (!form.titulo) throw new Error('Falta el título');
-        if (!form.todasSucursales && !form.sucursal_id) throw new Error('Elegí una sucursal o "Todas las sucursales"');
         if (!form.fecha) throw new Error('Elegí una fecha');
+        const todas = form.sucursalesEspecialesIds.length === 0;
         await api.post('/api/calendario', {
           tipo: 'EVENTO_ESPECIAL',
-          todas_sucursales: form.todasSucursales,
-          sucursal_id: form.todasSucursales ? null : Number(form.sucursal_id),
+          todas_sucursales: todas,
+          sucursal_ids: todas ? undefined : form.sucursalesEspecialesIds,
           titulo: form.titulo,
           descripcion: form.descripcion || null,
           responsable_user_id: form.responsable_user_id || null,
@@ -624,17 +669,13 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, onClose, onCreado }
         )}
 
         {form.tipo === 'EVENTO_ESPECIAL' && (
-          <div className="space-y-2">
-            <label className="flex items-center gap-2 text-sm text-gray-700">
-              <input type="checkbox" checked={form.todasSucursales} onChange={(e) => setForm({ ...form, todasSucursales: e.target.checked, sucursal_id: '' })} />
-              Todas las sucursales
-            </label>
-            {!form.todasSucursales && (
-              <Select label="Sucursal" required value={form.sucursal_id} onChange={(e) => setForm({ ...form, sucursal_id: e.target.value })}>
-                <option value="">Elegí una sucursal</option>
-                {sucursales.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
-              </Select>
-            )}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Sucursales</label>
+            <SelectorSucursalesMultiple
+              sucursales={sucursales}
+              seleccionadas={form.sucursalesEspecialesIds}
+              onChange={(v) => setForm({ ...form, sucursalesEspecialesIds: v })}
+            />
           </div>
         )}
 
@@ -686,7 +727,7 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, onClose, onCreado }
 
         <BuscadorResponsable
           sucursalId={sucursalId}
-          todasLasSucursales={form.tipo === 'EVENTO_ESPECIAL' && form.todasSucursales}
+          todasLasSucursales={form.tipo === 'EVENTO_ESPECIAL' && form.sucursalesEspecialesIds.length === 0}
           nombreValue={form.responsable_nombre}
           label={form.tipo === 'EVENTO_ESPECIAL' ? 'Responsable (opcional)' : 'Responsable'}
           onChange={(id, u) => setForm({ ...form, responsable_user_id: id, responsable_nombre: u ? (u.nombre || u.email) : '' })}
