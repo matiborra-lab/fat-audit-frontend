@@ -319,7 +319,7 @@ export default function GestionarTurnos() {
         <>
           <p className="text-xs text-gray-400">
             El horario y los días habilitados de cada turno se configuran desde{' '}
-            <Link to="/sucursales" className="text-fat-bordo-600 hover:underline">Sucursales</Link>.
+            <Link to="/configuracion" className="text-fat-bordo-600 hover:underline">Sucursales</Link>.
           </p>
 
           {solicitudes && solicitudes.length > 0 && (

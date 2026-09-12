@@ -13,26 +13,29 @@ const linkClassSidebar = ({ isActive }) =>
   (isActive ? 'bg-fat-bordo-50 text-fat-bordo-700' : 'text-gray-600 hover:bg-gray-100');
 
 function itemsDeNav(rol) {
-  // Un Colaborador solo ve su calendario (sus turnos y tareas/auditorías
-  // asignadas) - nada de dashboard, historial ni gestión.
-  if (rol === 'COLABORADOR') return [{ to: '/calendario', label: 'Calendario' }];
+  // Un Colaborador solo ve su calendario y sus tareas - nada de dashboard,
+  // historial ni gestión.
+  if (rol === 'COLABORADOR') {
+    return [{ to: '/calendario', label: 'Calendario' }, { to: '/tareas', label: 'Tareas' }];
+  }
 
   const items = [
     { to: '/', label: 'Dashboard', end: true },
     { to: '/historial', label: 'Historial' },
     { to: '/calendario', label: 'Calendario' },
-    { to: '/ejecutar', label: 'Nueva auditoría' },
   ];
-  if (rol === 'ADMIN' || rol === 'AUDITOR') {
-    items.push({ to: '/auditorias', label: 'Auditorías' });
-  }
+
+  const children = [{ to: '/ejecutar', label: 'Nueva auditoría' }];
+  if (rol === 'ADMIN' || rol === 'AUDITOR') children.push({ to: '/auditorias', label: 'Plantillas' });
+  children.push({ to: '/reportes-programados', label: 'Reportes' });
+  items.push({ label: 'Auditorías', children });
+
   if (rol === 'ADMIN' || rol === 'GERENTE') {
     items.push({ to: '/turnos', label: 'Turnos' });
-    items.push({ to: '/usuarios', label: rol === 'GERENTE' ? 'Colaboradores' : 'Usuarios' });
   }
-  items.push({ to: '/reportes-programados', label: 'Reportes' });
+  items.push({ to: '/tareas', label: 'Tareas' });
   if (rol === 'ADMIN' || rol === 'GERENTE') {
-    items.push({ to: '/sucursales', label: 'Sucursales' });
+    items.push({ to: '/configuracion', label: 'Configuración' });
   }
   return items;
 }
@@ -124,11 +127,55 @@ function CampanaNotificaciones() {
   );
 }
 
+// Ítem de nav que puede ser un link simple o un grupo desplegable
+// ({label, children:[...]}) - usado tanto en la barra lateral de escritorio
+// como en el panel de celular, con el mismo estado de apertura.
+function ItemNav({ item, gruposAbiertos, alternarGrupo }) {
+  if (!item.children) {
+    return <NavLink to={item.to} end={item.end} className={linkClassSidebar}>{item.label}</NavLink>;
+  }
+  const abierto = gruposAbiertos.has(item.label);
+  return (
+    <div>
+      <button
+        onClick={() => alternarGrupo(item.label)}
+        className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100"
+      >
+        {item.label}
+        <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor" className={`transition-transform ${abierto ? 'rotate-180' : ''}`} aria-hidden="true">
+          <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+        </svg>
+      </button>
+      {abierto && (
+        <div className="pl-3 mt-0.5 space-y-1">
+          {item.children.map((c) => (
+            <NavLink key={c.to} to={c.to} end={c.end} className={linkClassSidebar}>{c.label}</NavLink>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Layout() {
   const { usuario, logout } = useAuth();
   const location = useLocation();
   const [menuAbierto, setMenuAbierto] = useState(false);
   const items = itemsDeNav(usuario.rol);
+  const [gruposAbiertos, setGruposAbiertos] = useState(() => {
+    // Auto-expandir el grupo cuyo hijo coincide con la ruta actual al montar.
+    const grupo = items.find((it) => it.children?.some((c) => location.pathname.startsWith(c.to)));
+    return new Set(grupo ? [grupo.label] : []);
+  });
+
+  function alternarGrupo(label) {
+    setGruposAbiertos((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      return next;
+    });
+  }
 
   useEffect(() => {
     setMenuAbierto(false);
@@ -145,7 +192,7 @@ export default function Layout() {
         </div>
         <nav className="flex-1 overflow-y-auto p-3 flex flex-col gap-1">
           {items.map((it) => (
-            <NavLink key={it.to} to={it.to} end={it.end} className={linkClassSidebar}>{it.label}</NavLink>
+            <ItemNav key={it.to || it.label} item={it} gruposAbiertos={gruposAbiertos} alternarGrupo={alternarGrupo} />
           ))}
         </nav>
         <div className="border-t border-gray-100 p-3 space-y-2 shrink-0">

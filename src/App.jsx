@@ -15,8 +15,8 @@ import Ejecutar from './pages/Ejecutar';
 import Ejecucion from './pages/Ejecucion';
 import Auditorias from './pages/Auditorias';
 import AuditoriaConstructor from './pages/AuditoriaConstructor';
-import Sucursales from './pages/Sucursales';
-import Usuarios from './pages/Usuarios';
+import Configuracion from './pages/Configuracion';
+import Tareas from './pages/Tareas';
 import ReportesProgramados from './pages/ReportesProgramados';
 
 // Un Colaborador no tiene dashboard - su pantalla inicial es el calendario
@@ -48,6 +48,7 @@ export default function App() {
             <Route element={<Layout />}>
               <Route path="/" element={<Inicio />} />
               <Route path="/calendario" element={<Calendario />} />
+              <Route path="/tareas" element={<Tareas />} />
 
               <Route element={<RequireRole roles={['ADMIN', 'AUDITOR', 'GERENTE']} />}>
                 <Route path="/historial" element={<Historial />} />
@@ -58,16 +59,12 @@ export default function App() {
 
               <Route element={<RequireRole roles={['ADMIN', 'GERENTE']} />}>
                 <Route path="/turnos" element={<GestionarTurnos />} />
-                <Route path="/usuarios" element={<Usuarios />} />
+                <Route path="/configuracion" element={<Configuracion />} />
               </Route>
 
               <Route element={<RequireRole roles={['ADMIN', 'AUDITOR']} />}>
                 <Route path="/auditorias" element={<Auditorias />} />
                 <Route path="/auditorias/:id" element={<AuditoriaConstructor />} />
-              </Route>
-
-              <Route element={<RequireRole roles={['ADMIN', 'GERENTE']} />}>
-                <Route path="/sucursales" element={<Sucursales />} />
               </Route>
             </Route>
           </Route>
