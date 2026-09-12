@@ -186,23 +186,6 @@ function SelectorSucursalesMultiple({ sucursales, seleccionadas, onChange }) {
   );
 }
 
-// Ícono representativo en la leyenda: el fijo por tipo, o el default de
-// Tarea/Evento especial (el real de cada instancia varía, ver iconoEvento).
-const ICONO_LEYENDA = { ...TIPO_ICONO, TAREA: ICONO_TAREA_DEFAULT, EVENTO_ESPECIAL: ICONO_EVENTO_ESPECIAL_DEFAULT };
-
-function Leyenda() {
-  return (
-    <div className="flex flex-wrap gap-x-4 gap-y-1.5">
-      {Object.entries(TIPO_LABEL).map(([clave, label]) => (
-        <span key={clave} className="inline-flex items-center gap-1.5 text-xs text-gray-500">
-          <span className={`w-2.5 h-2.5 rounded-full ${(TIPO_COLOR[clave] || '').split(' ')[0]}`} />
-          {ICONO_LEYENDA[clave] ? `${ICONO_LEYENDA[clave]} ` : ''}{label}
-        </span>
-      ))}
-    </div>
-  );
-}
-
 export default function Calendario() {
   const { usuario } = useAuth();
   const navigate = useNavigate();
@@ -341,8 +324,6 @@ export default function Calendario() {
         )}
         <SelectorTiposMultiple seleccionados={filtroTipos} onChange={setFiltroTipos} />
       </div>
-
-      <Leyenda />
 
       {error && <p className="text-sm text-fat-bordo-600">{error}</p>}
 
