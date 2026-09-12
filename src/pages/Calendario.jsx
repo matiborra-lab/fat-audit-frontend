@@ -328,6 +328,7 @@ export default function Calendario() {
           sucursales={sucursales}
           plantillas={plantillas}
           usuario={usuario}
+          sucursalEnVista={sucursalIdVista}
           onClose={() => setModalNuevo(false)}
           onCreado={() => { setModalNuevo(false); recargar(); setToast('Evento creado'); }}
         />
@@ -552,23 +553,39 @@ function SelectorDias({ opciones, seleccionados, onChange, chico }) {
   );
 }
 
-function ModalNuevoEvento({ sucursales, plantillas, usuario, onClose, onCreado }) {
+function ModalNuevoEvento({ sucursales, plantillas, usuario, sucursalEnVista, onClose, onCreado }) {
   const esGerente = usuario.rol === 'GERENTE';
+  const esAdmin = usuario.rol === 'ADMIN';
   const [form, setForm] = useState({
     sucursal_id: esGerente ? usuario.sucursal_id : '',
     tipo: 'AUDITORIA', template_id: '', titulo: '', descripcion: '', responsable_user_id: '', responsable_nombre: '', fecha: '', hora: '10:00',
     recurrenciaTipo: 'NINGUNA', recurrenciaHasta: '',
     // Específico de TAREA:
-    tareaModo: 'CATALOGO', tipoTareaId: '', tareaCatalogoId: '', tituloOtro: '', fotoRequerida: false,
+    tareaCatalogoId: '', tituloOtro: '', fotoRequerida: false,
     tareaRecurrencia: 'NINGUNA', diasSemana: [], diasMes: [], sinHora: false, fechaHasta: '',
     // Específico de EVENTO_ESPECIAL (vacío = todas las sucursales):
     sucursalesEspecialesIds: [],
   });
   const [tiposTarea, setTiposTarea] = useState([]);
+  const [tipoTareaAbierto, setTipoTareaAbierto] = useState(''); // qué tipo está desplegado en el 2do select
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState('');
 
-  const sucursalId = esGerente ? usuario.sucursal_id : form.sucursal_id;
+  // Tarea: solo Admin elige sucursal libremente; Gerente ya la tiene fija
+  // (la suya) y Auditor la toma fija de la sucursal que esté viendo en el
+  // calendario (sin opción de elegir "todas").
+  const sucursalId = esGerente
+    ? usuario.sucursal_id
+    : (form.tipo === 'TAREA' && !esAdmin) ? sucursalEnVista : form.sucursal_id;
+
+  // Al pasar a Tarea como Admin, precarga la sucursal que se estaba viendo
+  // en el calendario (si había una sola) en vez de arrancar vacío.
+  useEffect(() => {
+    if (form.tipo === 'TAREA' && esAdmin && !form.sucursal_id && sucursalEnVista) {
+      setForm((f) => ({ ...f, sucursal_id: String(sucursalEnVista) }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.tipo]);
 
   useEffect(() => {
     if (form.tipo === 'TAREA' && sucursalId) {
@@ -576,7 +593,12 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, onClose, onCreado }
     }
   }, [form.tipo, sucursalId]);
 
-  const tareasDelTipo = tiposTarea.find((t) => String(t.id) === String(form.tipoTareaId))?.tareas || [];
+  // El 2do select ("Tarea") muestra las tareas del tipo elegido en el 1er
+  // select + una opción fija "Otro" al final - se busca por tipoTareaAbierto
+  // (que puede diferir del tipo real de la tarea ya elegida) para no perder
+  // la selección de tipo al re-renderizar.
+  const tareasDelTipoAbierto = tiposTarea.find((t) => String(t.id) === String(tipoTareaAbierto))?.tareas || [];
+  const esOtro = form.tareaCatalogoId === '__otro';
 
   async function crear(e) {
     e.preventDefault();
@@ -597,14 +619,17 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, onClose, onCreado }
           fecha_hora: `${form.fecha}T${form.hora}:00`,
         });
       } else if (form.tipo === 'TAREA' && form.tareaRecurrencia !== 'NINGUNA') {
+        if (!sucursalId) throw new Error('Elegí una sucursal');
+        if (!esOtro && !form.tareaCatalogoId) throw new Error('Elegí una tarea');
+        if (esOtro && !form.tituloOtro) throw new Error('Escribí una descripción');
         if (form.tareaRecurrencia === 'SEMANAL' && !form.diasSemana.length) throw new Error('Elegí al menos un día de la semana');
         if (form.tareaRecurrencia === 'MENSUAL' && !form.diasMes.length) throw new Error('Elegí al menos un día del mes');
         if (!form.fecha) throw new Error('Elegí una fecha de inicio');
         await api.post('/api/calendario/tareas/programar', {
           sucursal_id: Number(sucursalId),
-          tarea_catalogo_id: form.tareaModo === 'CATALOGO' ? Number(form.tareaCatalogoId) || null : null,
-          titulo: form.tareaModo === 'OTRO' ? form.tituloOtro : null,
-          foto_requerida: form.tareaModo === 'OTRO' ? form.fotoRequerida : undefined,
+          tarea_catalogo_id: esOtro ? null : Number(form.tareaCatalogoId) || null,
+          titulo: esOtro ? form.tituloOtro : null,
+          foto_requerida: esOtro ? form.fotoRequerida : undefined,
           responsable_user_id: form.responsable_user_id || null,
           frecuencia: form.tareaRecurrencia,
           dias_semana: form.tareaRecurrencia === 'SEMANAL' ? form.diasSemana : undefined,
@@ -614,16 +639,22 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, onClose, onCreado }
           fecha_hasta: form.fechaHasta || null,
         });
       } else {
+        if (form.tipo === 'TAREA') {
+          if (!sucursalId) throw new Error('Elegí una sucursal');
+          if (!esOtro && !form.tareaCatalogoId) throw new Error('Elegí una tarea');
+          if (esOtro && !form.tituloOtro) throw new Error('Escribí una descripción');
+        }
         if (!form.fecha) throw new Error('Elegí una fecha');
         await api.post('/api/calendario', {
           sucursal_id: Number(sucursalId),
           tipo: form.tipo,
           template_id: form.tipo !== 'TAREA' ? Number(form.template_id) : null,
-          tarea_catalogo_id: form.tipo === 'TAREA' && form.tareaModo === 'CATALOGO' ? Number(form.tareaCatalogoId) || null : null,
-          titulo: form.tipo === 'TAREA' && form.tareaModo === 'OTRO' ? form.tituloOtro : null,
-          foto_requerida: form.tipo === 'TAREA' && form.tareaModo === 'OTRO' ? form.fotoRequerida : undefined,
+          tarea_catalogo_id: form.tipo === 'TAREA' && !esOtro ? Number(form.tareaCatalogoId) || null : null,
+          titulo: form.tipo === 'TAREA' && esOtro ? form.tituloOtro : null,
+          foto_requerida: form.tipo === 'TAREA' && esOtro ? form.fotoRequerida : undefined,
           responsable_user_id: form.responsable_user_id || null,
           fecha_hora: `${form.fecha}T${form.sinHora && form.tipo === 'TAREA' ? '00:00' : form.hora}:00`,
+          hora_definida: form.tipo === 'TAREA' ? !form.sinHora : undefined,
           recurrencia: form.tipo !== 'TAREA' && form.recurrenciaTipo !== 'NINGUNA' ? { tipo: form.recurrenciaTipo, hasta: form.recurrenciaHasta } : null,
         });
       }
@@ -661,11 +692,33 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, onClose, onCreado }
           {!esGerente && <option value="EVENTO_ESPECIAL">Evento especial</option>}
         </Select>
 
-        {!esGerente && form.tipo !== 'EVENTO_ESPECIAL' && (
+        {!esGerente && form.tipo !== 'EVENTO_ESPECIAL' && form.tipo !== 'TAREA' && (
           <Select label="Sucursal" required value={form.sucursal_id} onChange={(e) => setForm({ ...form, sucursal_id: e.target.value })}>
             <option value="">Elegí una sucursal</option>
             {sucursales.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
           </Select>
+        )}
+
+        {/* Tarea: solo Admin la elige - Gerente ya está fija (bloque de
+            abajo la usa vía sucursalId) y Auditor la toma fija de la
+            sucursal que esté viendo en el calendario, sin poder elegir
+            "todas". */}
+        {form.tipo === 'TAREA' && !esGerente && (
+          esAdmin ? (
+            <Select label="Sucursal" required value={form.sucursal_id} onChange={(e) => setForm({ ...form, sucursal_id: e.target.value })}>
+              <option value="">Elegí una sucursal</option>
+              {sucursales.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+            </Select>
+          ) : sucursalEnVista ? (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Sucursal</label>
+              <p className="text-sm text-gray-700 px-3 py-2 bg-gray-50 rounded-lg border border-gray-200">
+                {sucursales.find((s) => s.id === sucursalEnVista)?.nombre || `Sucursal #${sucursalEnVista}`}
+              </p>
+            </div>
+          ) : (
+            <p className="text-sm text-fat-bordo-600">Filtrá el calendario a una sola sucursal para poder crear una tarea.</p>
+          )
         )}
 
         {form.tipo === 'EVENTO_ESPECIAL' && (
@@ -694,28 +747,28 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, onClose, onCreado }
         )}
 
         {form.tipo === 'TAREA' && (
-          <div className="space-y-3 border border-gray-100 rounded-lg p-3">
-            <div className="flex rounded-lg border border-gray-300 overflow-hidden text-sm w-fit">
-              <button type="button" onClick={() => setForm({ ...form, tareaModo: 'CATALOGO' })} className={`px-3 py-1 ${form.tareaModo === 'CATALOGO' ? 'bg-fat-bordo-500 text-white' : 'bg-white text-gray-600'}`}>Del catálogo</button>
-              <button type="button" onClick={() => setForm({ ...form, tareaModo: 'OTRO' })} className={`px-3 py-1 ${form.tareaModo === 'OTRO' ? 'bg-fat-bordo-500 text-white' : 'bg-white text-gray-600'}`}>Otro</button>
-            </div>
+          <div className="space-y-3">
+            <Select
+              label="Tipo de tarea"
+              required={!!sucursalId}
+              value={tipoTareaAbierto}
+              onChange={(e) => { setTipoTareaAbierto(e.target.value); setForm({ ...form, tareaCatalogoId: '' }); }}
+            >
+              <option value="">{sucursalId ? 'Elegí un tipo' : 'Elegí primero la sucursal'}</option>
+              {tiposTarea.map((t) => <option key={t.id} value={t.id}>{t.nombre}</option>)}
+            </Select>
 
-            {form.tareaModo === 'CATALOGO' ? (
+            {tipoTareaAbierto && (
+              <Select label="Tarea" required value={form.tareaCatalogoId} onChange={(e) => setForm({ ...form, tareaCatalogoId: e.target.value })}>
+                <option value="">Elegí una tarea</option>
+                {tareasDelTipoAbierto.map((t) => <option key={t.id} value={t.id}>{t.nombre}{t.foto_requerida ? ' (requiere foto)' : ''}</option>)}
+                <option value="__otro">Otro</option>
+              </Select>
+            )}
+
+            {esOtro && (
               <>
-                <Select label="Tipo de tarea" required={!sucursalId ? false : true} value={form.tipoTareaId} onChange={(e) => setForm({ ...form, tipoTareaId: e.target.value, tareaCatalogoId: '' })}>
-                  <option value="">{sucursalId ? 'Elegí un tipo' : 'Elegí primero la sucursal'}</option>
-                  {tiposTarea.map((t) => <option key={t.id} value={t.id}>{t.nombre}</option>)}
-                </Select>
-                {form.tipoTareaId && (
-                  <Select label="Tarea" required value={form.tareaCatalogoId} onChange={(e) => setForm({ ...form, tareaCatalogoId: e.target.value })}>
-                    <option value="">Elegí una tarea</option>
-                    {tareasDelTipo.map((t) => <option key={t.id} value={t.id}>{t.nombre}{t.foto_requerida ? ' (requiere foto)' : ''}</option>)}
-                  </Select>
-                )}
-              </>
-            ) : (
-              <>
-                <Campo label="Título de la tarea" required value={form.tituloOtro} onChange={(e) => setForm({ ...form, tituloOtro: e.target.value })} />
+                <Campo label="Descripción" required value={form.tituloOtro} onChange={(e) => setForm({ ...form, tituloOtro: e.target.value })} />
                 <label className="flex items-center gap-2 text-sm text-gray-600">
                   <input type="checkbox" checked={form.fotoRequerida} onChange={(e) => setForm({ ...form, fotoRequerida: e.target.checked })} />
                   Requiere foto de evidencia (solo cámara) para completarla
@@ -743,10 +796,17 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, onClose, onCreado }
 
             <div className="grid grid-cols-2 gap-3">
               <Campo label={form.tareaRecurrencia === 'NINGUNA' ? 'Fecha' : 'Desde'} type="date" required value={form.fecha} onChange={(e) => setForm({ ...form, fecha: e.target.value })} />
-              {form.tareaRecurrencia !== 'NINGUNA' && (
-                <Campo label="Hasta (opcional)" type="date" value={form.fechaHasta} onChange={(e) => setForm({ ...form, fechaHasta: e.target.value })} />
-              )}
+              {!form.sinHora && <Campo label="Hora" type="time" required value={form.hora} onChange={(e) => setForm({ ...form, hora: e.target.value })} />}
             </div>
+
+            <label className="flex items-center gap-2 text-sm text-gray-600">
+              <input type="checkbox" checked={form.sinHora} onChange={(e) => setForm({ ...form, sinHora: e.target.checked })} />
+              Sin horario
+            </label>
+
+            {form.tareaRecurrencia !== 'NINGUNA' && (
+              <Campo label="Hasta (opcional)" type="date" value={form.fechaHasta} onChange={(e) => setForm({ ...form, fechaHasta: e.target.value })} />
+            )}
 
             {form.tareaRecurrencia === 'SEMANAL' && (
               <div>
@@ -760,12 +820,6 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, onClose, onCreado }
                 <SelectorDias opciones={DIAS_DEL_MES} seleccionados={form.diasMes} onChange={(v) => setForm({ ...form, diasMes: v })} chico />
               </div>
             )}
-
-            <label className="flex items-center gap-2 text-sm text-gray-600">
-              <input type="checkbox" checked={form.sinHora} onChange={(e) => setForm({ ...form, sinHora: e.target.checked })} />
-              Sin horario, solo el día (vence al terminar el día)
-            </label>
-            {!form.sinHora && <Campo label="Hora" type="time" required value={form.hora} onChange={(e) => setForm({ ...form, hora: e.target.value })} />}
           </div>
         ) : form.tipo === 'EVENTO_ESPECIAL' ? (
           <div className="grid grid-cols-2 gap-3">
