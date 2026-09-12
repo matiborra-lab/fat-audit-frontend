@@ -23,7 +23,7 @@ export default function Usuarios() {
   const [modalAbierto, setModalAbierto] = useState(false);
   const [editando, setEditando] = useState(null);
   const [toast, setToast] = useState('');
-  const [form, setForm] = useState({ email: '', usuario: '', nombre: '', rol: esGerente ? 'COLABORADOR' : 'AUDITOR', sucursal_id: '', puesto: '' });
+  const [form, setForm] = useState({ email: '', usuario: '', nombre: '', rol: esGerente ? 'COLABORADOR' : 'AUDITOR', sucursal_id: '', puesto: '', fecha_nacimiento: '' });
   const [formEdit, setFormEdit] = useState(null);
   const [error, setError] = useState('');
   const [guardando, setGuardando] = useState(false);
@@ -53,7 +53,7 @@ export default function Usuarios() {
       if (body.rol !== 'COLABORADOR') delete body.puesto;
       await api.post('/api/admin/usuarios', body);
       setModalAbierto(false);
-      setForm({ email: '', usuario: '', nombre: '', rol: esGerente ? 'COLABORADOR' : 'AUDITOR', sucursal_id: '', puesto: '' });
+      setForm({ email: '', usuario: '', nombre: '', rol: esGerente ? 'COLABORADOR' : 'AUDITOR', sucursal_id: '', puesto: '', fecha_nacimiento: '' });
       setToast('Usuario invitado por mail');
       recargar();
     } catch (err) {
@@ -70,11 +70,12 @@ export default function Usuarios() {
     try {
       const body = { nombre: formEdit.nombre, usuario: formEdit.usuario || null };
       if (esGerente) {
-        if (editando.rol === 'COLABORADOR') body.puesto = formEdit.puesto;
+        if (editando.rol === 'COLABORADOR') { body.puesto = formEdit.puesto; body.fecha_nacimiento = formEdit.fecha_nacimiento || null; }
       } else {
         body.rol = formEdit.rol;
         body.sucursal_id = (formEdit.rol === 'GERENTE' || formEdit.rol === 'COLABORADOR') ? Number(formEdit.sucursal_id) : null;
         if (formEdit.rol === 'COLABORADOR') body.puesto = formEdit.puesto;
+        if (formEdit.rol === 'GERENTE' || formEdit.rol === 'COLABORADOR') body.fecha_nacimiento = formEdit.fecha_nacimiento || null;
       }
       await api.patch(`/api/admin/usuarios/${editando.id}`, body);
       setEditando(null);
@@ -109,7 +110,7 @@ export default function Usuarios() {
   function abrirEdicion(u) {
     setError('');
     setConfirmandoReset(false);
-    setFormEdit({ nombre: u.nombre || '', usuario: u.usuario || '', puesto: u.puesto || '', rol: u.rol, sucursal_id: u.sucursal_id || '' });
+    setFormEdit({ nombre: u.nombre || '', usuario: u.usuario || '', puesto: u.puesto || '', rol: u.rol, sucursal_id: u.sucursal_id || '', fecha_nacimiento: u.fecha_nacimiento || '' });
     setEditando(u);
   }
 
@@ -182,6 +183,9 @@ export default function Usuarios() {
                 {PUESTOS.map((p) => <option key={p} value={p}>{PUESTO_LABEL[p]}</option>)}
               </Select>
             )}
+            {(esGerente || form.rol === 'GERENTE' || form.rol === 'COLABORADOR') && (
+              <Campo label="Fecha de nacimiento (opcional)" type="date" value={form.fecha_nacimiento} onChange={(e) => setForm({ ...form, fecha_nacimiento: e.target.value })} />
+            )}
             {error && <p className="text-sm text-fat-bordo-600">{error}</p>}
             <Boton type="submit" cargando={guardando}>Invitar</Boton>
           </form>
@@ -209,6 +213,9 @@ export default function Usuarios() {
                 <option value="">Elegí un puesto</option>
                 {PUESTOS.map((p) => <option key={p} value={p}>{PUESTO_LABEL[p]}</option>)}
               </Select>
+            )}
+            {(formEdit.rol === 'GERENTE' || formEdit.rol === 'COLABORADOR') && (
+              <Campo label="Fecha de nacimiento (opcional)" type="date" value={formEdit.fecha_nacimiento} onChange={(e) => setFormEdit({ ...formEdit, fecha_nacimiento: e.target.value })} />
             )}
             <p className="text-xs text-gray-400">Última actividad: {formatearFecha(editando.ultima_actividad_en)}</p>
             {error && <p className="text-sm text-fat-bordo-600">{error}</p>}

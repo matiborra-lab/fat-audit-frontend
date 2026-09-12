@@ -19,10 +19,11 @@ const TIPO_COLOR = {
   EVENTO_ESPECIAL: 'bg-pink-100 text-pink-700 animate-pulse',
   // Feriados nacionales (ArgentinaDatos) - color e ícono propio, ver TIPO_ICONO.
   FERIADO: 'bg-sky-100 text-sky-800',
+  CUMPLEANOS: 'bg-fuchsia-100 text-fuchsia-800',
 };
-const TIPO_ICONO = { FERIADO: '🇦🇷' };
+const TIPO_ICONO = { FERIADO: '🇦🇷', CUMPLEANOS: '🎁' };
 const FERIADO_TIPO_LABEL = { inamovible: 'Feriado nacional', trasladable: 'Feriado trasladable', puente: 'Puente turístico' };
-const TIPO_LABEL = { AUDITORIA: 'Auditoría de marca', AUDITORIA_INTERNA: 'Auditoría interna', SEGUIMIENTO: 'Seguimiento', TAREA: 'Tarea', TURNO: 'Turno', EVENTO_ESPECIAL: 'Evento especial', FERIADO: 'Feriado' };
+const TIPO_LABEL = { AUDITORIA: 'Auditoría de marca', AUDITORIA_INTERNA: 'Auditoría interna', SEGUIMIENTO: 'Seguimiento', TAREA: 'Tarea', TURNO: 'Turno', EVENTO_ESPECIAL: 'Evento especial', FERIADO: 'Feriado', CUMPLEANOS: 'Cumpleaños' };
 const TIPOS_FILTRO = [
   { valor: 'AUDITORIA', label: 'Auditoría' },
   { valor: 'SEGUIMIENTO', label: 'Seguimiento' },
@@ -30,6 +31,7 @@ const TIPOS_FILTRO = [
   { valor: 'TURNO', label: 'Turno' },
   { valor: 'EVENTO_ESPECIAL', label: 'Evento especial' },
   { valor: 'FERIADO', label: 'Feriado' },
+  { valor: 'CUMPLEANOS', label: 'Cumpleaños' },
 ];
 const MOTIVOS_PRESET = ['Baja por malestar', 'Problemas personales', 'Evento especial'];
 // Lun..Dom en la UI -> Date#getDay() (0=domingo..6=sábado), igual que el resto de la app (ver GestionarTurnos).
@@ -211,6 +213,25 @@ export default function Calendario() {
   }, [sucursalIdVista]);
   const climaPorDia = useMemo(() => new Map(clima.map((c) => [c.fecha, c])), [clima]);
 
+  // Cumpleaños: mismo criterio que el clima (solo con una sucursal puntual
+  // en vista) - pide el/los años que la grilla visible cruza.
+  const [cumpleanos, setCumpleanos] = useState([]);
+  useEffect(() => {
+    if (!sucursalIdVista) { setCumpleanos([]); return; }
+    const anios = new Set([diasVisibles[0].getFullYear(), diasVisibles[diasVisibles.length - 1].getFullYear()]);
+    Promise.all([...anios].map((anio) => api.get(`/api/sucursales/${sucursalIdVista}/cumpleanos?anio=${anio}`).catch(() => [])))
+      .then((listas) => setCumpleanos(listas.flat()));
+  }, [sucursalIdVista, diasVisibles[0]?.getFullYear(), diasVisibles[diasVisibles.length - 1]?.getFullYear()]);
+  const cumpleanosVisibles = filtroTipos.length === 0 || filtroTipos.includes('CUMPLEANOS') ? cumpleanos : [];
+  const cumpleanosPorDia = useMemo(() => {
+    const mapa = new Map();
+    for (const c of cumpleanosVisibles) {
+      if (!mapa.has(c.fecha)) mapa.set(c.fecha, []);
+      mapa.get(c.fecha).push(c);
+    }
+    return mapa;
+  }, [cumpleanosVisibles]);
+
   // Feriados: nacionales, no de una sucursal - se ven siempre (incluida
   // "todas las sucursales"), respetando el filtro de tipos como cualquier otro.
   const [feriados, setFeriados] = useState([]);
@@ -265,6 +286,7 @@ export default function Calendario() {
 
   const eventosDelDiaSeleccionado = diaSeleccionado ? eventosPorDia.get(aClaveDia(diaSeleccionado)) || [] : [];
   const feriadosDelDiaSeleccionado = diaSeleccionado ? feriadosPorDia.get(aClaveDia(diaSeleccionado)) || [] : [];
+  const cumpleanosDelDiaSeleccionado = diaSeleccionado ? cumpleanosPorDia.get(aClaveDia(diaSeleccionado)) || [] : [];
 
   return (
     <div className="space-y-4">
@@ -306,6 +328,7 @@ export default function Calendario() {
           const delMes = vista === 'MES' ? d.getMonth() === ancla.getMonth() : true;
           const esHoy = aClaveDia(d) === aClaveDia(hoy);
           const feriadosDia = feriadosPorDia.get(aClaveDia(d)) || [];
+          const cumpleanosDia = cumpleanosPorDia.get(aClaveDia(d)) || [];
           const eventosDia = eventosPorDia.get(aClaveDia(d)) || [];
           const maxVisibles = vista === 'SEMANA' ? 6 : 2;
           const climaDiaRaw = climaPorDia.get(aClaveDia(d));
@@ -332,6 +355,11 @@ export default function Calendario() {
                     {TIPO_ICONO.FERIADO} {f.nombre}
                   </p>
                 ))}
+                {cumpleanosDia.map((c) => (
+                  <p key={`cumple-${c.usuario_id}`} className={`text-[10px] px-1 py-0.5 rounded truncate ${TIPO_COLOR.CUMPLEANOS}`} title={`Cumpleaños de ${c.nombre || c.email}`}>
+                    {TIPO_ICONO.CUMPLEANOS} {c.nombre || c.email}
+                  </p>
+                ))}
                 {eventosDia.slice(0, maxVisibles).map((e) => (
                   <p key={e.id} className={`text-[10px] px-1 py-0.5 rounded truncate ${colorEvento(e)}`} title={etiquetaEvento(e)}>{e.titulo}</p>
                 ))}
@@ -347,6 +375,7 @@ export default function Calendario() {
           <DiaDetalle
             eventos={eventosDelDiaSeleccionado}
             feriados={feriadosDelDiaSeleccionado}
+            cumpleanos={cumpleanosDelDiaSeleccionado}
             usuario={usuario}
             onCambio={() => { recargar(); setToast('Actualizado'); }}
             onIniciarRun={(runId) => navigate(`/ejecucion/${runId}`)}
@@ -380,14 +409,20 @@ function puedeGestionarEvento(usuario, evento) {
   return false;
 }
 
-function DiaDetalle({ eventos, feriados, usuario, onCambio, onIniciarRun }) {
-  if (eventos.length === 0 && feriados.length === 0) return <p className="text-sm text-gray-400">No hay eventos este día.</p>;
+function DiaDetalle({ eventos, feriados, cumpleanos, usuario, onCambio, onIniciarRun }) {
+  if (eventos.length === 0 && feriados.length === 0 && cumpleanos.length === 0) return <p className="text-sm text-gray-400">No hay eventos este día.</p>;
   return (
     <div className="space-y-3">
       {feriados.map((f) => (
         <div key={`feriado-${f.fecha}-${f.nombre}`} className={`rounded-lg p-3 ${TIPO_COLOR.FERIADO}`}>
           <span className="text-[10px] font-medium uppercase opacity-70">{TIPO_ICONO.FERIADO} {FERIADO_TIPO_LABEL[f.tipo] || 'Feriado'}</span>
           <p className="text-sm font-medium mt-0.5">{f.nombre}</p>
+        </div>
+      ))}
+      {cumpleanos.map((c) => (
+        <div key={`cumple-${c.usuario_id}`} className={`rounded-lg p-3 ${TIPO_COLOR.CUMPLEANOS}`}>
+          <span className="text-[10px] font-medium uppercase opacity-70">{TIPO_ICONO.CUMPLEANOS} Cumpleaños</span>
+          <p className="text-sm font-medium mt-0.5">{c.nombre || c.email}</p>
         </div>
       ))}
       {eventos.map((e) => (
