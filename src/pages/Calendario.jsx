@@ -135,7 +135,11 @@ function SelectorTiposMultiple({ seleccionados, onChange }) {
 // Dropdown de checkboxes - filtro/selector multi-sucursal, con "Todas las
 // sucursales" como opción de otro nivel (separada del resto) que tilda/
 // destilda todas las individuales de una - mismo patrón visual que
-// SelectorTiposMultiple. `seleccionadas` vacío = "todas".
+// SelectorTiposMultiple. `seleccionadas` es tri-estado: null = todas las
+// sucursales; un array (incluso vacío) = selección manual explícita, así
+// "todas" y "ninguna elegida todavía" son estados distintos y se puede
+// destildar "Todas" sin que sea un no-op (antes [] representaba ambos casos
+// a la vez, por eso tildar "Todas" de nuevo no hacía nada).
 function SelectorSucursalesMultiple({ sucursales, seleccionadas, onChange }) {
   const [abierto, setAbierto] = useState(false);
   const ref = useRef(null);
@@ -144,9 +148,9 @@ function SelectorSucursalesMultiple({ sucursales, seleccionadas, onChange }) {
     document.addEventListener('mousedown', alClickAfuera);
     return () => document.removeEventListener('mousedown', alClickAfuera);
   }, []);
-  const todasTildadas = seleccionadas.length === 0 || seleccionadas.length === sucursales.length;
+  const todasTildadas = seleccionadas === null;
   function alternarTodas() {
-    onChange(todasTildadas ? [] : sucursales.map((s) => s.id));
+    onChange(todasTildadas ? [] : null);
   }
   function alternar(id) {
     const base = todasTildadas ? sucursales.map((s) => s.id) : seleccionadas;
@@ -154,7 +158,9 @@ function SelectorSucursalesMultiple({ sucursales, seleccionadas, onChange }) {
   }
   const etiqueta = todasTildadas
     ? 'Todas las sucursales'
-    : sucursales.filter((s) => seleccionadas.includes(s.id)).map((s) => s.nombre).join(', ');
+    : seleccionadas.length === 0
+      ? 'Ninguna sucursal'
+      : sucursales.filter((s) => seleccionadas.includes(s.id)).map((s) => s.nombre).join(', ');
   return (
     <div ref={ref} className="relative">
       <button type="button" onClick={() => setAbierto((a) => !a)} className="rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white text-gray-700 max-w-[220px] truncate">
@@ -206,7 +212,7 @@ export default function Calendario() {
   const [eventos, setEventos] = useState(null);
   const [sucursales, setSucursales] = useState([]);
   const [plantillas, setPlantillas] = useState([]);
-  const [filtroSucursales, setFiltroSucursales] = useState([]); // vacío = todas
+  const [filtroSucursales, setFiltroSucursales] = useState(null); // null = todas
   const [filtroTipos, setFiltroTipos] = useState([]);
   const [diaSeleccionado, setDiaSeleccionado] = useState(null);
   const [modalNuevo, setModalNuevo] = useState(false);
@@ -221,7 +227,7 @@ export default function Calendario() {
   // Clima: solo tiene sentido mostrarlo cuando se está viendo UNA sucursal
   // puntual (Gerente/Colaborador siempre ven la suya; Admin/Auditor solo si
   // filtraron una) - "todas las sucursales" no muestra clima.
-  const sucursalIdVista = veTodasSucursales ? (filtroSucursales.length === 1 ? filtroSucursales[0] : null) : usuario.sucursal_id;
+  const sucursalIdVista = veTodasSucursales ? (Array.isArray(filtroSucursales) && filtroSucursales.length === 1 ? filtroSucursales[0] : null) : usuario.sucursal_id;
   const [clima, setClima] = useState([]);
   useEffect(() => {
     if (!sucursalIdVista) { setClima([]); return; }
@@ -267,10 +273,14 @@ export default function Calendario() {
   }, [feriadosVisibles]);
 
   function recargar() {
+    // Selección manual sin ninguna sucursal tildada: cero eventos, sin
+    // pedirle nada al backend (no confundir con filtroSucursales === null,
+    // que significa "todas" y no manda el parámetro).
+    if (Array.isArray(filtroSucursales) && filtroSucursales.length === 0) { setEventos([]); return; }
     const desde = aClaveDia(diasVisibles[0]);
     const hasta = aClaveDia(diasVisibles[diasVisibles.length - 1]);
     const params = new URLSearchParams({ desde, hasta });
-    if (filtroSucursales.length) params.set('sucursal_id', filtroSucursales.join(','));
+    if (Array.isArray(filtroSucursales)) params.set('sucursal_id', filtroSucursales.join(','));
     if (filtroTipos.length) params.set('tipo', filtroTipos.join(','));
     api.get(`/api/calendario?${params}`).then(setEventos).catch((e) => setError(e.message));
   }
@@ -654,8 +664,8 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, sucursalEnVista, on
     // Específico de TAREA:
     tareaCatalogoId: '', tituloOtro: '', fotoRequerida: false,
     tareaRecurrencia: 'NINGUNA', diasSemana: [], diasMes: [], sinHora: false, fechaHasta: '',
-    // Específico de EVENTO_ESPECIAL (vacío = todas las sucursales):
-    sucursalesEspecialesIds: [], icono: ICONO_EVENTO_ESPECIAL_DEFAULT,
+    // Específico de EVENTO_ESPECIAL (null = todas las sucursales, array = selección manual):
+    sucursalesEspecialesIds: null, icono: ICONO_EVENTO_ESPECIAL_DEFAULT,
   });
   const [tiposTarea, setTiposTarea] = useState([]);
   const [tipoTareaAbierto, setTipoTareaAbierto] = useState(''); // qué tipo está desplegado en el 2do select
@@ -699,7 +709,8 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, sucursalEnVista, on
       if (form.tipo === 'EVENTO_ESPECIAL') {
         if (!form.titulo) throw new Error('Falta el título');
         if (!form.fecha) throw new Error('Elegí una fecha');
-        const todas = form.sucursalesEspecialesIds.length === 0;
+        const todas = form.sucursalesEspecialesIds === null;
+        if (!todas && !form.sucursalesEspecialesIds.length) throw new Error('Elegí al menos una sucursal');
         await api.post('/api/calendario', {
           tipo: 'EVENTO_ESPECIAL',
           todas_sucursales: todas,
@@ -873,7 +884,7 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, sucursalEnVista, on
 
         <BuscadorResponsable
           sucursalId={sucursalId}
-          todasLasSucursales={form.tipo === 'EVENTO_ESPECIAL' && form.sucursalesEspecialesIds.length === 0}
+          todasLasSucursales={form.tipo === 'EVENTO_ESPECIAL' && form.sucursalesEspecialesIds === null}
           nombreValue={form.responsable_nombre}
           label={form.tipo === 'EVENTO_ESPECIAL' ? 'Responsable (opcional)' : 'Responsable'}
           onChange={(id, u) => setForm({ ...form, responsable_user_id: id, responsable_nombre: u ? (u.nombre || u.email) : '' })}
