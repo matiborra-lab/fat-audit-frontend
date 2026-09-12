@@ -9,8 +9,8 @@ self.addEventListener('fetch', () => {});
 // { titulo, cuerpo, tipo, ...payload_json de la notificacion }.
 self.addEventListener('push', (event) => {
   let datos = {};
-  try { datos = event.data ? event.data.json() : {}; } catch { datos = { titulo: 'FAT Audit', cuerpo: event.data?.text() }; }
-  const titulo = datos.titulo || 'FAT Audit';
+  try { datos = event.data ? event.data.json() : {}; } catch { datos = { titulo: 'FAT Gestión', cuerpo: event.data?.text() }; }
+  const titulo = datos.titulo || 'FAT Gestión';
   event.waitUntil(
     self.registration.showNotification(titulo, {
       body: datos.cuerpo || '',

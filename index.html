@@ -9,7 +9,15 @@
     <meta name="theme-color" content="#86152D" />
     <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <title>FAT Audit</title>
+    <!-- Nombre al agregar a la pantalla de inicio: iOS/iPadOS (Safari) no
+         siempre respeta el "name"/"short_name" del manifest para esto, usa
+         esta meta como fuente de verdad - Android/Windows sí usan el
+         manifest. application-name es el fallback que toma Windows/Edge
+         si por algún motivo no llega a leer el manifest. -->
+    <meta name="apple-mobile-web-app-title" content="FAT Gestión" />
+    <meta name="application-name" content="FAT Gestión" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <title>FAT Gestión</title>
   </head>
   <body>
     <div id="root"></div>

@@ -45,7 +45,7 @@ export default function InstalarApp() {
       <button
         onClick={onClick}
         aria-label="Descargar app"
-        title="Descargar FAT Audit como app"
+        title="Descargar FAT Gestión como app"
         className="text-gray-500 hover:text-gray-700 p-1.5"
       >
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -56,10 +56,10 @@ export default function InstalarApp() {
       </button>
 
       {mostrarInstrucciones && (
-        <Modal titulo="Descargar FAT Audit" onClose={() => setMostrarInstrucciones(false)}>
+        <Modal titulo="Descargar FAT Gestión" onClose={() => setMostrarInstrucciones(false)}>
           <div className="space-y-4 text-sm text-gray-700">
-            <img src="/brand/pwa-icon-192.png" alt="FAT Audit" className="w-14 h-14 rounded-xl mx-auto object-contain" />
-            <p className="text-center">Instalá FAT Audit en tu pantalla de inicio para acceder más rápido, como una app.</p>
+            <img src="/brand/pwa-icon-192.png" alt="FAT Gestión" className="w-14 h-14 rounded-xl mx-auto object-contain" />
+            <p className="text-center">Instalá FAT Gestión en tu pantalla de inicio para acceder más rápido, como una app.</p>
             <ol className="space-y-3">
               <li className="flex items-start gap-3">
                 <span className="shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-fat-bordo-100 text-fat-bordo-800 text-xs font-semibold">1</span>

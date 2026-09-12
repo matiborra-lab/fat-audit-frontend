@@ -1,6 +1,6 @@
 {
-  "name": "FAT Audit",
-  "short_name": "FAT Audit",
+  "name": "FAT Gestión",
+  "short_name": "FAT Gestión",
   "description": "Auditorías de sucursales FAT Burger",
   "start_url": "/",
   "display": "standalone",
