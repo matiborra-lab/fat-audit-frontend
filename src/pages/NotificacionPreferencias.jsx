@@ -86,6 +86,7 @@ export default function NotificacionPreferencias() {
 
   return (
     <div className="space-y-4">
+      <h1 className="text-xl font-semibold text-gray-900">Notificaciones</h1>
       <p className="text-sm text-gray-500">
         Elegí qué notificaciones querés recibir (campana y push) y con cuánta anticipación.
       </p>

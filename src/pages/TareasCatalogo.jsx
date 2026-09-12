@@ -68,6 +68,7 @@ export default function TareasCatalogo() {
 
   return (
     <div className="space-y-4">
+      <h1 className="text-xl font-semibold text-gray-900">Tareas</h1>
       <Leyenda>Los tipos y tareas activos son los que ven Admin/Auditor/Gerente al programar una tarea desde el calendario, filtrados por sucursal.</Leyenda>
 
       <Tarjeta className="p-4 flex items-center justify-between gap-3">
