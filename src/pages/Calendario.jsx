@@ -141,10 +141,14 @@ function SelectorTiposMultiple({ seleccionados, onChange }) {
 // desktop, solo el número en mobile - ver RESUMEN_TIPO). Tocar la tarjeta
 // no abre nada aparte: solo cambia qué día muestra el panel "Detalle del
 // día" de más abajo.
-function DiaCardSemana({ dia, etiqueta, esHoy, seleccionado, eventosDia, feriadosDia, cumpleanosDia, licenciasDia, climaDia: climaDiaRaw, onClick }) {
+function DiaCardSemana({ dia, etiqueta, esHoy, seleccionado, eventosDia, feriadosDia, cumpleanosDia, licenciasDia, climaDia: climaDiaRaw, usuario, onClick }) {
   const climaDia = climaDiaRaw?.temp_max != null ? climaDiaRaw : null;
   const turnos = eventosDia.filter((e) => e.tipo === 'TURNO');
   const tiposTurno = new Set(turnos.map((t) => t.turno_tipo));
+  // El Gerente ve los turnos de todos - si ese día hay turnos (de otros) pero
+  // no tiene uno propio, se lo aclara aparte para no confundir "hay gente
+  // trabajando" con "yo trabajo".
+  const gerenteLibreEseDia = usuario?.rol === 'GERENTE' && tiposTurno.size > 0 && !turnos.some((t) => t.responsable_user_id === usuario.id);
   const conteos = new Map();
   for (const e of eventosDia) {
     if (e.tipo === 'TURNO') continue;
@@ -178,13 +182,16 @@ function DiaCardSemana({ dia, etiqueta, esHoy, seleccionado, eventosDia, feriado
           <span className="text-[10px] text-gray-400">Libre</span>
         </div>
       ) : (
-        <div className="flex gap-1">
-          {tiposTurno.has('DIURNO') && (
-            <span className="w-9 h-9 rounded-full bg-fat-amarillo-100 flex items-center justify-center text-base" title="Turno diurno">☀️</span>
-          )}
-          {tiposTurno.has('NOCTURNO') && (
-            <span className="w-9 h-9 rounded-full bg-purple-100 flex items-center justify-center text-base" title="Turno nocturno">🌙</span>
-          )}
+        <div className="flex flex-col items-center gap-1">
+          <div className="flex gap-1">
+            {tiposTurno.has('DIURNO') && (
+              <span className="w-9 h-9 rounded-full bg-fat-amarillo-100 flex items-center justify-center text-base" title="Turno diurno">☀️</span>
+            )}
+            {tiposTurno.has('NOCTURNO') && (
+              <span className="w-9 h-9 rounded-full bg-purple-100 flex items-center justify-center text-base" title="Turno nocturno">🌙</span>
+            )}
+          </div>
+          {gerenteLibreEseDia && <span className="text-[9px] text-gray-400">(vos: libre)</span>}
         </div>
       )}
 
@@ -413,6 +420,7 @@ export default function Calendario() {
               cumpleanosDia={cumpleanosPorDia.get(aClaveDia(d)) || []}
               licenciasDia={licenciasPorDia.get(aClaveDia(d)) || []}
               climaDia={climaPorDia.get(aClaveDia(d))}
+              usuario={usuario}
               onClick={() => setDiaSeleccionado(d)}
             />
           ))}
