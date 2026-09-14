@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
-import { Tarjeta, Campo, Select, Boton, Modal, Toast, Cargando, BotonCamara, SelectorEmoji, SelectorSucursalesMultiple, SelectorDias } from '../components/ui';
+import { Tarjeta, Campo, Select, Boton, Modal, Toast, Cargando, BotonCamara, SelectorEmoji, SelectorSucursalesMultiple, SelectorDias, emojiClima } from '../components/ui';
 import BuscadorResponsable from '../components/BuscadorResponsable';
 import { esHallazgo } from '../utils/hallazgos';
 
@@ -60,19 +60,6 @@ function colorEvento(e) {
 function etiquetaEvento(e) {
   if (e.tipo === 'AUDITORIA' && e.plantilla_tipo === 'INTERNA') return TIPO_LABEL.AUDITORIA_INTERNA;
   return TIPO_LABEL[e.tipo];
-}
-
-// Íconos simplificados a partir del weather_code de Open-Meteo (WMO).
-function emojiClima(code) {
-  if (code === 0) return '☀️';
-  if (code === 1) return '🌤️';
-  if (code === 2) return '⛅';
-  if (code === 3) return '☁️';
-  if (code === 45 || code === 48) return '🌫️';
-  if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82)) return '🌧️';
-  if (code >= 71 && code <= 77) return '❄️';
-  if (code >= 95) return '⛈️';
-  return '';
 }
 
 function aClaveDia(d) {

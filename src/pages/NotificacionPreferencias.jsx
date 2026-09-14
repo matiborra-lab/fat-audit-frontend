@@ -5,6 +5,10 @@ import { Tarjeta, Boton, Modal, Select, Campo, Toast, Cargando } from '../compon
 // Mismas opciones de anticipación para cualquier tipo con RECORDATORIO_* -
 // horas fijas en vez de un campo libre, más simple de elegir en el momento.
 const ANTICIPACION_OPCIONES = [1, 3, 6, 12, 24, 48, 72];
+// Evento especial admite hasta 7 días de anticipación (a diferencia de
+// Tarea/Auditoría, que se avisan con horas de antelación nomás) - cumpleaños
+// no tiene anticipación configurable, siempre es el mismo día.
+const ANTICIPACION_OPCIONES_EVENTO_ESPECIAL = [1, 3, 6, 12, 24, 48, 72, 96, 120, 144, 168];
 function etiquetaAnticipacion(horas) {
   if (horas < 24) return `${horas} hora${horas > 1 ? 's' : ''} antes`;
   const dias = horas / 24;
@@ -32,6 +36,7 @@ const CATEGORIAS_EVENTO = [
   {
     titulo: 'Evento especial', asignacion: 'ASIGNACION_EVENTO_ESPECIAL', recordatorio: 'RECORDATORIO_EVENTO_ESPECIAL', anticipacionDefault: 24,
     descripcionAsignacion: 'Avisar cuando sos responsable de un evento especial', descripcionRecordatorio: 'Recordar antes de un evento especial de tu sucursal',
+    anticipacionOpciones: ANTICIPACION_OPCIONES_EVENTO_ESPECIAL,
   },
 ];
 const TIPOS_SIMPLES = [
@@ -110,7 +115,7 @@ export default function NotificacionPreferencias() {
                     value={rec.anticipacion_horas ?? cat.anticipacionDefault}
                     onChange={(e) => actualizar(cat.recordatorio, { habilitado: true, anticipacion_horas: Number(e.target.value) })}
                   >
-                    {ANTICIPACION_OPCIONES.map((h) => <option key={h} value={h}>{etiquetaAnticipacion(h)}</option>)}
+                    {(cat.anticipacionOpciones || ANTICIPACION_OPCIONES).map((h) => <option key={h} value={h}>{etiquetaAnticipacion(h)}</option>)}
                   </select>
                 )}
                 <input type="checkbox" checked={rec.habilitado} onChange={(e) => actualizar(cat.recordatorio, { habilitado: e.target.checked })} />

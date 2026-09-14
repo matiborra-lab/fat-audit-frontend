@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
-import { Tarjeta, Campo, Select, Boton, Modal, Toast, Cargando, SelectorDias } from '../components/ui';
+import { Tarjeta, Campo, Select, Boton, Modal, Toast, Cargando, SelectorDias, emojiClima } from '../components/ui';
 import BuscadorResponsable from '../components/BuscadorResponsable';
 
 const PUESTOS = ['COCINA', 'CAJA', 'REFUERZO_COCINA'];
@@ -127,6 +127,16 @@ export default function GestionarTurnos() {
     }
     return mapa;
   }, [cumpleanos]);
+
+  // Clima de la sucursal, mismo endpoint que usa Calendario - se muestra
+  // directamente en el chip del turno (a la derecha del label) para que el
+  // gerente vea de un vistazo si conviene reforzar personal ese día.
+  const [clima, setClima] = useState([]);
+  useEffect(() => {
+    if (!sucursalId) { setClima([]); return; }
+    api.get(`/api/sucursales/${sucursalId}/clima`).then(setClima).catch(() => setClima([]));
+  }, [sucursalId]);
+  const climaPorDia = useMemo(() => new Map(clima.map((c) => [c.fecha, c])), [clima]);
 
   const [eventosEspeciales, setEventosEspeciales] = useState([]);
   useEffect(() => {
@@ -328,11 +338,20 @@ export default function GestionarTurnos() {
   // más arriba) - antes se dibujaba un placeholder "No disponible".
   function CeldaTurno({ fecha, turnoTipo }) {
     const claveFecha = aClaveDia(fecha);
+    const climaDiaRaw = climaPorDia.get(claveFecha);
+    const climaDia = climaDiaRaw?.temp_max != null ? climaDiaRaw : null;
     return (
       <div className="border border-gray-100 rounded-lg p-1 sm:p-1.5 bg-gray-50/50 min-w-0 overflow-hidden">
-        <div className="flex items-center justify-between mb-1">
+        <div className="flex items-center justify-between gap-1 mb-1">
           <span className="text-[9px] sm:text-[10px] font-semibold text-gray-500 uppercase truncate">{TURNO_LABEL[turnoTipo]}</span>
-          <button onClick={() => abrirAlta(claveFecha, turnoTipo)} className="text-fat-bordo-600 hover:bg-fat-bordo-50 rounded w-4 h-4 leading-none text-sm font-bold shrink-0">+</button>
+          <div className="flex items-center gap-1 shrink-0">
+            {climaDia && (
+              <span className="text-[9px] text-gray-400 truncate" title={`${Math.round(climaDia.temp_min)}° / ${Math.round(climaDia.temp_max)}°`}>
+                {emojiClima(climaDia.weather_code)} {Math.round(climaDia.temp_max)}°
+              </span>
+            )}
+            <button onClick={() => abrirAlta(claveFecha, turnoTipo)} className="text-fat-bordo-600 hover:bg-fat-bordo-50 rounded w-4 h-4 leading-none text-sm font-bold shrink-0">+</button>
+          </div>
         </div>
         <div className="space-y-1">
           {PUESTOS.map((p) => {

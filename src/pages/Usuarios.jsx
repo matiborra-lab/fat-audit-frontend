@@ -30,6 +30,7 @@ export default function Usuarios() {
   const [confirmandoReset, setConfirmandoReset] = useState(false);
   const [reseteando, setReseteando] = useState(false);
   const [eliminando, setEliminando] = useState(null); // usuario a confirmar
+  const [mostrarEliminados, setMostrarEliminados] = useState(false);
 
   function recargar() {
     const params = new URLSearchParams();
@@ -52,10 +53,13 @@ export default function Usuarios() {
       if (esGerente) { body.rol = 'COLABORADOR'; delete body.sucursal_id; }
       else { body.sucursal_id = (form.rol === 'GERENTE' || form.rol === 'COLABORADOR') ? Number(form.sucursal_id) : null; }
       if (body.rol !== 'COLABORADOR') delete body.puesto;
-      await api.post('/api/admin/usuarios', body);
+      const creado = await api.post('/api/admin/usuarios', body);
       setModalAbierto(false);
       setForm({ email: '', usuario: '', nombre: '', rol: esGerente ? 'COLABORADOR' : 'AUDITOR', sucursal_id: '', puesto: '', fecha_nacimiento: '' });
-      setToast('Usuario invitado por mail');
+      // El backend crea el usuario igual aunque el mail de invitación falle
+      // (ver advertencia) - antes acá se mostraba siempre "invitado por
+      // mail" sin chequear eso, ocultando el fallo de envío.
+      setToast(creado.advertencia || 'Usuario invitado por mail');
       recargar();
     } catch (err) {
       setError(err.message);
@@ -117,6 +121,12 @@ export default function Usuarios() {
 
   if (!lista) return <Cargando />;
 
+  // Los deshabilitados se sacan del listado principal y se agrupan aparte
+  // (colapsados) - antes se mezclaban con "(eliminado)" al lado del nombre,
+  // ensuciando la vista principal con gente que ya no trabaja ahí.
+  const activos = lista.filter((u) => u.activo);
+  const eliminados = lista.filter((u) => !u.activo);
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -139,27 +149,63 @@ export default function Usuarios() {
 
       <Tarjeta className="overflow-hidden">
         <div className="divide-y divide-gray-100">
-          {lista.length === 0 && <p className="p-4 text-sm text-gray-400">No hay usuarios con estos filtros.</p>}
-          {lista.map((u) => (
+          {activos.length === 0 && <p className="p-4 text-sm text-gray-400">No hay usuarios con estos filtros.</p>}
+          {activos.map((u) => (
             <div key={u.id} className="px-4 py-3 flex items-center justify-between gap-3">
               <button className="min-w-0 text-left" onClick={() => abrirEdicion(u)}>
-                <p className="text-sm font-medium text-gray-900 truncate">{u.nombre || u.email} {!u.activo && <span className="text-xs text-gray-400">(eliminado)</span>}</p>
+                <p className="text-sm font-medium text-gray-900 truncate">{u.nombre || u.email}</p>
                 <p className="text-xs text-gray-400 truncate">
                   {u.usuario ? `@${u.usuario} · ` : ''}{u.email} · {ROL_LABEL[u.rol]}{u.puesto ? ` · ${PUESTO_LABEL[u.puesto]}` : ''}{u.sucursal_nombre ? ` · ${u.sucursal_nombre}` : ''}
                   {!u.clave_definida && ' · invitación pendiente'}
                 </p>
                 <p className="text-xs text-gray-300 truncate">Última actividad: {formatearFecha(u.ultima_actividad_en)}</p>
               </button>
-              <button
-                onClick={() => (u.activo ? setEliminando(u) : cambiarActivo(u))}
-                className={`text-xs shrink-0 px-2.5 py-1 rounded-full font-medium ${u.activo ? 'bg-gray-100 text-gray-500 hover:bg-fat-bordo-100 hover:text-fat-bordo-700' : 'bg-gray-100 text-gray-500 hover:bg-green-100 hover:text-green-700'}`}
-              >
-                {u.activo ? 'Eliminar' : 'Reactivar'}
-              </button>
+              {!esGerente && (
+                <button
+                  onClick={() => setEliminando(u)}
+                  className="text-xs shrink-0 px-2.5 py-1 rounded-full font-medium bg-gray-100 text-gray-500 hover:bg-fat-bordo-100 hover:text-fat-bordo-700"
+                >
+                  Eliminar
+                </button>
+              )}
             </div>
           ))}
         </div>
       </Tarjeta>
+
+      {eliminados.length > 0 && (
+        <Tarjeta className="overflow-hidden">
+          <button
+            className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left"
+            onClick={() => setMostrarEliminados((v) => !v)}
+          >
+            <span className="text-sm font-medium text-gray-500">Usuarios deshabilitados ({eliminados.length})</span>
+            <span className="text-gray-400 text-xs">{mostrarEliminados ? '▲' : '▼'}</span>
+          </button>
+          {mostrarEliminados && (
+            <div className="divide-y divide-gray-100 border-t border-gray-100">
+              {eliminados.map((u) => (
+                <div key={u.id} className="px-4 py-3 flex items-center justify-between gap-3 opacity-70">
+                  <button className="min-w-0 text-left" onClick={() => abrirEdicion(u)}>
+                    <p className="text-sm font-medium text-gray-700 truncate">{u.nombre || u.email}</p>
+                    <p className="text-xs text-gray-400 truncate">
+                      {u.usuario ? `@${u.usuario} · ` : ''}{u.email} · {ROL_LABEL[u.rol]}{u.sucursal_nombre ? ` · ${u.sucursal_nombre}` : ''}
+                    </p>
+                  </button>
+                  {!esGerente && (
+                    <button
+                      onClick={() => cambiarActivo(u)}
+                      className="text-xs shrink-0 px-2.5 py-1 rounded-full font-medium bg-gray-100 text-gray-500 hover:bg-green-100 hover:text-green-700"
+                    >
+                      Reactivar
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </Tarjeta>
+      )}
 
       {modalAbierto && (
         <Modal titulo={esGerente ? 'Invitar colaborador' : 'Invitar usuario'} onClose={() => setModalAbierto(false)}>
