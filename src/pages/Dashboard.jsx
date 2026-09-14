@@ -63,7 +63,11 @@ export default function Dashboard() {
   if (error) return <p className="text-fat-bordo-600">{error}</p>;
   if (!datos) return <Cargando />;
 
-  const unaSucursal = (usuario.rol === 'GERENTE' || sucursalFiltro) && datos.ranking.length === 1;
+  const unaSucursal = (usuario.rol === 'GERENTE' || usuario.rol === 'COLABORADOR' || sucursalFiltro) && datos.ranking.length === 1;
+  // Historial es Admin/Auditor/Gerente únicamente (ver RequireRole en
+  // App.jsx) - un Colaborador que llega acá no puede entrar ahí, así que la
+  // fila de su sucursal queda informativa nomás, sin link.
+  const puedeVerHistorial = usuario.rol !== 'COLABORADOR';
 
   const datosAuditorias = [...datos.ultimasAuditorias].reverse().map((a) => ({
     ...a, pct: Math.round(a.puntaje_total * 100),
@@ -104,28 +108,32 @@ export default function Dashboard() {
         </div>
         <div className="divide-y divide-gray-100">
           {datos.ranking.length === 0 && <p className="p-4 text-sm text-gray-400">Todavía no hay auditorías completadas.</p>}
-          {datos.ranking.map((r, i) => (
-            <Link key={r.sucursal_id} to={`/historial?sucursal_id=${r.sucursal_id}`} className="flex items-center justify-between px-4 py-3 hover:bg-gray-50 gap-3">
-              <div className="flex items-center gap-3 min-w-0">
-                {!unaSucursal && (
-                  <span className="shrink-0 w-6 h-6 rounded-full bg-gray-100 text-gray-600 text-xs font-bold flex items-center justify-center">{i + 1}</span>
-                )}
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">{r.sucursal_nombre}</p>
-                  {r.completada_en ? (
-                    <p className="text-xs text-gray-400">{TIPO_LABEL[r.tipo] || r.tipo} · {new Date(r.completada_en).toLocaleDateString('es-AR')}</p>
-                  ) : (
-                    <p className="text-xs text-gray-400">Sin auditorías completadas</p>
+          {datos.ranking.map((r, i) => {
+            const Fila = puedeVerHistorial ? Link : 'div';
+            const props = puedeVerHistorial ? { to: `/historial?sucursal_id=${r.sucursal_id}` } : {};
+            return (
+              <Fila key={r.sucursal_id} {...props} className={`flex items-center justify-between px-4 py-3 gap-3 ${puedeVerHistorial ? 'hover:bg-gray-50' : ''}`}>
+                <div className="flex items-center gap-3 min-w-0">
+                  {!unaSucursal && (
+                    <span className="shrink-0 w-6 h-6 rounded-full bg-gray-100 text-gray-600 text-xs font-bold flex items-center justify-center">{i + 1}</span>
                   )}
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">{r.sucursal_nombre}</p>
+                    {r.completada_en ? (
+                      <p className="text-xs text-gray-400">{TIPO_LABEL[r.tipo] || r.tipo} · {new Date(r.completada_en).toLocaleDateString('es-AR')}</p>
+                    ) : (
+                      <p className="text-xs text-gray-400">Sin auditorías completadas</p>
+                    )}
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-center gap-3 shrink-0">
-                <Tendencia valor={r.tendencia} />
-                <Puntaje valor={r.puntaje_total} semaforo={r.semaforo} />
-                <Resultado valor={r.resultado} />
-              </div>
-            </Link>
-          ))}
+                <div className="flex items-center gap-3 shrink-0">
+                  <Tendencia valor={r.tendencia} />
+                  <Puntaje valor={r.puntaje_total} semaforo={r.semaforo} />
+                  <Resultado valor={r.resultado} />
+                </div>
+              </Fila>
+            );
+          })}
         </div>
       </Tarjeta>
 

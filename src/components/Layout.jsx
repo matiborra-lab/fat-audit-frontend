@@ -12,33 +12,39 @@ const linkClassSidebar = ({ isActive }) =>
   'block px-3 py-2 rounded-lg text-sm font-medium ' +
   (isActive ? 'bg-fat-bordo-50 text-fat-bordo-700' : 'text-gray-600 hover:bg-gray-100');
 
+// Orden general (todos los roles): Calendario primero (pantalla de entrada
+// de la app), Turnos y Auditorías después (uso diario), Historial/Tareas,
+// Dashboard cerca del final (ya no es la pantalla de entrada) y
+// Configuración siempre último.
 function itemsDeNav(rol) {
-  // Un Colaborador solo ve su calendario y sus tareas - nada de dashboard,
-  // historial ni gestión - pero sí sus preferencias de notificación
-  // (personales, no requieren permisos de gestión).
+  // Un Colaborador solo ve su calendario, sus tareas y el dashboard de su
+  // propia sucursal - nada de historial ni gestión - pero sí sus
+  // preferencias de notificación (personales, no requieren permisos de
+  // gestión).
   if (rol === 'COLABORADOR') {
     return [
       { to: '/calendario', label: 'Calendario' },
       { to: '/tareas', label: 'Tareas' },
+      { to: '/dashboard', label: 'Dashboard' },
       { label: 'Configuración', children: [{ to: '/configuracion/notificaciones', label: 'Notificaciones' }] },
     ];
   }
 
-  const items = [
-    { to: '/', label: 'Dashboard', end: true },
-    { to: '/historial', label: 'Historial' },
-    { to: '/calendario', label: 'Calendario' },
-  ];
+  const items = [{ to: '/calendario', label: 'Calendario' }];
+
+  if (rol === 'ADMIN' || rol === 'GERENTE') {
+    items.push({ to: '/turnos', label: 'Turnos' });
+  }
 
   const children = [{ to: '/ejecutar', label: 'Nueva auditoría' }];
   if (rol === 'ADMIN' || rol === 'AUDITOR') children.push({ to: '/auditorias', label: 'Plantillas' });
   children.push({ to: '/reportes-programados', label: 'Reportes' });
   items.push({ label: 'Auditorías', children });
 
-  if (rol === 'ADMIN' || rol === 'GERENTE') {
-    items.push({ to: '/turnos', label: 'Turnos' });
-  }
+  items.push({ to: '/historial', label: 'Historial' });
   items.push({ to: '/tareas', label: 'Tareas' });
+  items.push({ to: '/dashboard', label: 'Dashboard' });
+
   // Sucursales/Usuarios/Tareas solo para quien gestiona (Admin/Gerente);
   // Notificaciones (preferencias personales) para cualquiera que llegue
   // hasta acá (incluido Auditor, que no tiene el resto de Configuración).

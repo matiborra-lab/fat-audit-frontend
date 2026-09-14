@@ -311,7 +311,7 @@ export function SelectorSucursalesMultiple({ sucursales, seleccionadas, onChange
       : sucursales.filter((s) => seleccionadas.includes(s.id)).map((s) => s.nombre).join(', ');
   return (
     <div ref={ref} className="relative">
-      <button type="button" onClick={() => setAbierto((a) => !a)} className="flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white text-gray-700 max-w-[220px]">
+      <button type="button" onClick={() => setAbierto((a) => !a)} className="h-9 flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 text-sm bg-white text-gray-700 max-w-[220px] shrink-0">
         {icono && <span className="shrink-0">{icono}</span>}<span className="truncate">{etiqueta}</span>
       </button>
       {abierto && (

@@ -114,7 +114,7 @@ function SelectorTiposMultiple({ seleccionados, onChange }) {
     : seleccionados.map((v) => TIPOS_FILTRO.find((t) => t.valor === v)?.label).join(', ');
   return (
     <div ref={ref} className="relative">
-      <button type="button" onClick={() => setAbierto((a) => !a)} className="flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white text-gray-700 max-w-[220px]">
+      <button type="button" onClick={() => setAbierto((a) => !a)} className="h-9 flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 text-sm bg-white text-gray-700 max-w-[220px] shrink-0">
         <span className="shrink-0">🏷️</span><span className="truncate">{etiqueta}</span>
       </button>
       {abierto && (
@@ -338,25 +338,30 @@ export default function Calendario() {
         {puedeCrear && <Boton ancho="w-auto" onClick={() => setModalNuevo(true)}>+ Agendar</Boton>}
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
+      {/* Todos los controles comparten la misma altura (h-9) y el mismo
+          padding vertical, para que al envolver en pantallas chicas cada
+          fila quede prolija en vez de una mezcla de tamaños/alturas. */}
+      <div className="flex flex-wrap items-center gap-2">
         <div className="flex items-center gap-2">
-          <button className="px-2 py-1 rounded-lg border border-gray-300 text-sm" onClick={() => navegar(-1)}>←</button>
-          <p className="text-sm font-medium text-gray-800 min-w-[160px] text-center capitalize">
+          <button className="h-9 w-9 shrink-0 flex items-center justify-center rounded-lg border border-gray-300 text-sm" onClick={() => navegar(-1)}>←</button>
+          <p className="text-sm font-medium text-gray-800 min-w-[150px] text-center capitalize">
             {vista === 'MES'
               ? ancla.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' })
               : `${semana[0].toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })} — ${semana[6].toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })}`}
           </p>
-          <button className="px-2 py-1 rounded-lg border border-gray-300 text-sm" onClick={() => navegar(1)}>→</button>
+          <button className="h-9 w-9 shrink-0 flex items-center justify-center rounded-lg border border-gray-300 text-sm" onClick={() => navegar(1)}>→</button>
         </div>
-        <button className="text-sm text-fat-bordo-600 hover:underline" onClick={() => setAncla(new Date())}>Hoy</button>
-        <div className="flex rounded-lg border border-gray-300 overflow-hidden text-sm">
-          <button onClick={() => setVista('MES')} className={`px-3 py-1 ${vista === 'MES' ? 'bg-fat-bordo-500 text-white' : 'bg-white text-gray-600'}`}>Mes</button>
-          <button onClick={() => setVista('SEMANA')} className={`px-3 py-1 ${vista === 'SEMANA' ? 'bg-fat-bordo-500 text-white' : 'bg-white text-gray-600'}`}>Semana</button>
+        <button className="h-9 px-3 flex items-center justify-center rounded-lg border border-gray-300 text-sm text-fat-bordo-600 hover:bg-fat-bordo-50 shrink-0" onClick={() => setAncla(new Date())}>Hoy</button>
+        <div className="h-9 flex rounded-lg border border-gray-300 overflow-hidden text-sm shrink-0">
+          <button onClick={() => setVista('MES')} className={`px-3 h-full ${vista === 'MES' ? 'bg-fat-bordo-500 text-white' : 'bg-white text-gray-600'}`}>Mes</button>
+          <button onClick={() => setVista('SEMANA')} className={`px-3 h-full ${vista === 'SEMANA' ? 'bg-fat-bordo-500 text-white' : 'bg-white text-gray-600'}`}>Semana</button>
         </div>
-        {veTodasSucursales && (
-          <SelectorSucursalesMultiple icono="🏢" sucursales={sucursales} seleccionadas={filtroSucursales} onChange={setFiltroSucursales} />
-        )}
-        <SelectorTiposMultiple seleccionados={filtroTipos} onChange={setFiltroTipos} />
+        <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
+          {veTodasSucursales && (
+            <SelectorSucursalesMultiple icono="🏢" sucursales={sucursales} seleccionadas={filtroSucursales} onChange={setFiltroSucursales} />
+          )}
+          <SelectorTiposMultiple seleccionados={filtroTipos} onChange={setFiltroTipos} />
+        </div>
       </div>
 
       {error && <p className="text-sm text-fat-bordo-600">{error}</p>}

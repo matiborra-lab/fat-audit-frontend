@@ -1,6 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
-import { useAuth } from './context/AuthContext';
 import { RequireAuth, RequireRole } from './components/ProtectedRoute';
 import Layout from './components/Layout';
 import Login from './pages/Login';
@@ -18,14 +17,6 @@ import AuditoriaConstructor from './pages/AuditoriaConstructor';
 import Configuracion from './pages/Configuracion';
 import Tareas from './pages/Tareas';
 import ReportesProgramados from './pages/ReportesProgramados';
-
-// Un Colaborador no tiene dashboard - su pantalla inicial es el calendario
-// (donde ve sus turnos y tareas asignadas).
-function Inicio() {
-  const { usuario } = useAuth();
-  if (usuario.rol === 'COLABORADOR') return <Navigate to="/calendario" replace />;
-  return <Dashboard />;
-}
 
 export default function App() {
   return (
@@ -46,7 +37,11 @@ export default function App() {
             </Route>
 
             <Route element={<Layout />}>
-              <Route path="/" element={<Inicio />} />
+              {/* Calendario es la pantalla de entrada para todos los roles -
+                  antes era Dashboard, ahora Dashboard vive en su propia ruta
+                  y se accede desde el menú (ver Layout.jsx). */}
+              <Route path="/" element={<Navigate to="/calendario" replace />} />
+              <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/calendario" element={<Calendario />} />
               <Route path="/tareas" element={<Tareas />} />
               {/* Sin gate de rol: Configuracion.jsx arma sus propias pestañas
