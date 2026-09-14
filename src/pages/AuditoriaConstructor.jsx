@@ -113,6 +113,7 @@ export default function AuditoriaConstructor() {
   const [aplicaTodas, setAplicaTodas] = useState(true);
   const [sucursalesHabilitadas, setSucursalesHabilitadas] = useState(new Set());
   const [aprobadoDesde, setAprobadoDesde] = useState('');
+  const [nombreEditado, setNombreEditado] = useState('');
   const [toast, setToast] = useState('');
   const [error, setError] = useState('');
   const [guardando, setGuardando] = useState(false);
@@ -124,6 +125,7 @@ export default function AuditoriaConstructor() {
       setAplicaTodas(data.aplica_todas_sucursales);
       setSucursalesHabilitadas(new Set(data.sucursal_ids));
       setAprobadoDesde(data.puntaje_minimo_aprobacion != null ? String(Math.round(data.puntaje_minimo_aprobacion * 1000) / 10) : '');
+      setNombreEditado(data.nombre);
     });
     api.get('/api/sucursales').then(setSucursales);
   }
@@ -164,6 +166,28 @@ export default function AuditoriaConstructor() {
     }
   }
 
+  async function guardarNombre() {
+    if (!nombreEditado.trim()) { setError('El nombre no puede estar vacío'); return; }
+    setError('');
+    try {
+      const actualizada = await api.patch(`/api/plantillas/${id}`, { nombre: nombreEditado.trim() });
+      setPlantilla(actualizada);
+      setToast('Nombre actualizado');
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function eliminarPlantilla() {
+    setError('');
+    try {
+      await api.del(`/api/plantillas/${id}`);
+      navigate('/auditorias');
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
   async function guardarAprobacion() {
     setError('');
     try {
@@ -198,11 +222,28 @@ export default function AuditoriaConstructor() {
   return (
     <div className="space-y-6 pb-16">
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold text-gray-900">{plantilla.nombre} <span className="text-gray-400 font-normal">v{plantilla.version}</span></h1>
+        <div className="flex-1 min-w-0">
+          {editable ? (
+            <div className="flex items-center gap-2 flex-wrap">
+              <input
+                className="text-xl font-semibold text-gray-900 rounded-lg border border-gray-300 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-fat-bordo-400"
+                value={nombreEditado}
+                onChange={(e) => setNombreEditado(e.target.value)}
+              />
+              <span className="text-gray-400 font-normal">v{plantilla.version}</span>
+              {nombreEditado.trim() && nombreEditado !== plantilla.nombre && (
+                <Boton ancho="w-auto" variante="secundario" onClick={guardarNombre}>Guardar nombre</Boton>
+              )}
+            </div>
+          ) : (
+            <h1 className="text-xl font-semibold text-gray-900">{plantilla.nombre} <span className="text-gray-400 font-normal">v{plantilla.version}</span></h1>
+          )}
           <p className="text-sm text-gray-500">{plantilla.tipo} · {plantilla.estado}</p>
         </div>
-        {!editable && <Boton ancho="w-auto" variante="secundario" onClick={crearNuevaVersion}>Crear nueva versión para editar</Boton>}
+        <div className="flex items-center gap-2 shrink-0">
+          {!editable && <Boton ancho="w-auto" variante="secundario" onClick={crearNuevaVersion}>Crear nueva versión para editar</Boton>}
+          <button onClick={eliminarPlantilla} className="text-xs text-gray-400 hover:text-fat-bordo-600">Eliminar plantilla</button>
+        </div>
       </div>
 
       {!editable && plantilla.estado !== 'ARCHIVADA' && <Leyenda>Esta plantilla está {plantilla.estado.toLowerCase()} y su estructura no se puede editar. Creá una nueva versión para modificar ítems/sectores/áreas sin afectar las auditorías ya hechas — las sucursales habilitadas sí se pueden ajustar acá abajo.</Leyenda>}

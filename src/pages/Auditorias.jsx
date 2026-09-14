@@ -17,6 +17,7 @@ export default function Auditorias() {
   const [error, setError] = useState('');
   const [guardando, setGuardando] = useState(false);
   const [duplicandoId, setDuplicandoId] = useState(null);
+  const [eliminandoId, setEliminandoId] = useState(null);
 
   function recargar() {
     api.get('/api/plantillas').then(setLista);
@@ -51,6 +52,19 @@ export default function Auditorias() {
     }
   }
 
+  async function eliminar(t) {
+    setError('');
+    setEliminandoId(t.id);
+    try {
+      await api.del(`/api/plantillas/${t.id}`);
+      setLista((l) => l.filter((x) => x.id !== t.id));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setEliminandoId(null);
+    }
+  }
+
   if (!lista) return <Cargando />;
 
   return (
@@ -78,6 +92,13 @@ export default function Auditorias() {
                 className="text-xs shrink-0 text-fat-bordo-600 hover:underline disabled:opacity-50"
               >
                 {duplicandoId === t.id ? 'Duplicando…' : 'Duplicar'}
+              </button>
+              <button
+                onClick={() => eliminar(t)}
+                disabled={eliminandoId === t.id}
+                className="text-xs shrink-0 text-gray-400 hover:text-fat-bordo-600 disabled:opacity-50"
+              >
+                {eliminandoId === t.id ? 'Eliminando…' : 'Eliminar'}
               </button>
             </div>
           ))}
