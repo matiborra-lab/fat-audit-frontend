@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { Tarjeta, Campo, Select, Boton, Modal, Toast, Cargando, SelectorDias, emojiClima } from '../components/ui';
@@ -43,12 +43,18 @@ function generarGrillaMes(anio, mes) {
 
 export default function GestionarTurnos() {
   const { usuario } = useAuth();
+  // Si se llega desde "Editar turno" en el Calendario (ver Calendario.jsx),
+  // arranca ya parado en ese día y esa sucursal en vez de "hoy" - Admin
+  // recibe la sucursal que se estaba viendo, Gerente siempre usa la suya.
+  const { state: estadoNavegacion } = useLocation();
   const [sucursales, setSucursales] = useState([]);
-  const [sucursalId, setSucursalId] = useState(usuario.rol === 'GERENTE' ? usuario.sucursal_id : '');
+  const [sucursalId, setSucursalId] = useState(
+    usuario.rol === 'GERENTE' ? usuario.sucursal_id : (estadoNavegacion?.sucursalId ? String(estadoNavegacion.sucursalId) : '')
+  );
   const [horarios, setHorarios] = useState(null); // Map 'dia|turno' -> {habilitado}, ver Sucursales > Horario de turnos
 
   const [vista, setVista] = useState('SEMANA'); // SEMANA | MES
-  const [ancla, setAncla] = useState(new Date());
+  const [ancla, setAncla] = useState(estadoNavegacion?.fecha ? new Date(`${estadoNavegacion.fecha}T00:00:00`) : new Date());
 
   const [toast, setToast] = useState('');
   const [error, setError] = useState('');

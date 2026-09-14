@@ -62,6 +62,9 @@ const TIPOS_FILTRO = [
 ];
 const MOTIVO_LICENCIA_LABEL = { VACACIONES: 'Vacaciones', SALUD: 'Salud', FAMILIAR: 'Asuntos familiares', OTRO: 'Otro' };
 const MOTIVOS_PRESET = ['Baja por malestar', 'Problemas personales', 'Evento especial'];
+const PUESTOS = ['COCINA', 'CAJA', 'REFUERZO_COCINA'];
+const PUESTO_LABEL = { COCINA: 'Cocina', CAJA: 'Caja', REFUERZO_COCINA: 'Refuerzo cocina' };
+const TURNO_TIPO_LABEL = { DIURNO: 'diurno', NOCTURNO: 'nocturno' };
 // Lun..Dom en la UI -> Date#getDay() (0=domingo..6=sábado), igual que el resto de la app (ver GestionarTurnos).
 const DIAS_SEMANA_UI = [
   { label: 'L', valor: 1 }, { label: 'M', valor: 2 }, { label: 'X', valor: 3 },
@@ -498,6 +501,7 @@ export default function Calendario() {
           usuario={usuario}
           onCambio={() => { recargar(); setToast('Actualizado'); }}
           onIniciarRun={(runId) => navigate(`/ejecucion/${runId}`)}
+          onEditarTurnos={(sucursalIdTurno) => navigate('/turnos', { state: { fecha: aClaveDia(diaSeleccionado), sucursalId: sucursalIdTurno ?? sucursalIdVista } })}
         />
       </Tarjeta>
 
@@ -527,7 +531,24 @@ function puedeGestionarEvento(usuario, evento) {
   return false;
 }
 
-function DiaDetalle({ eventos, feriados, cumpleanos, licencias, horarioPorDiaTurno, usuario, onCambio, onIniciarRun }) {
+function DiaDetalle({ eventos, feriados, cumpleanos, licencias, horarioPorDiaTurno, usuario, onCambio, onIniciarRun, onEditarTurnos }) {
+  const turnos = eventos.filter((e) => e.tipo === 'TURNO');
+  const otrosEventos = eventos.filter((e) => e.tipo !== 'TURNO');
+  // Agrupa por sucursal Y turno_tipo (no solo turno_tipo) - viendo "todas las
+  // sucursales" (Admin/Auditor) puede haber más de una sucursal con turno
+  // nocturno el mismo día, y no deben mezclarse en un solo cuadro.
+  const turnosPorGrupo = new Map();
+  for (const t of turnos) {
+    const clave = `${t.sucursal_id}|${t.turno_tipo}`;
+    if (!turnosPorGrupo.has(clave)) turnosPorGrupo.set(clave, []);
+    turnosPorGrupo.get(clave).push(t);
+  }
+  const sucursalesDistintas = new Set(turnos.map((t) => t.sucursal_id)).size;
+  const gruposDeTurno = [...turnosPorGrupo.values()].sort((a, b) => {
+    if (a[0].sucursal_nombre !== b[0].sucursal_nombre) return a[0].sucursal_nombre.localeCompare(b[0].sucursal_nombre);
+    return a[0].turno_tipo === b[0].turno_tipo ? 0 : a[0].turno_tipo === 'DIURNO' ? -1 : 1;
+  });
+
   if (eventos.length === 0 && feriados.length === 0 && cumpleanos.length === 0 && licencias.length === 0) return <p className="text-sm text-gray-400">No hay eventos este día.</p>;
   return (
     <div className="space-y-3">
@@ -549,21 +570,142 @@ function DiaDetalle({ eventos, feriados, cumpleanos, licencias, horarioPorDiaTur
           <p className="text-sm font-medium mt-0.5">{l.usuario_nombre}{l.detalle ? ` · ${l.detalle}` : ''}</p>
         </div>
       ))}
-      {eventos.map((e) => (
-        <EventoItem key={e.id} evento={e} usuario={usuario} puedeEditar={puedeGestionarEvento(usuario, e)} horarioPorDiaTurno={horarioPorDiaTurno} onCambio={onCambio} onIniciarRun={onIniciarRun} />
+      {gruposDeTurno.map((lista) => (
+        <TurnoDelDia key={`${lista[0].sucursal_id}-${lista[0].turno_tipo}`} turnoTipo={lista[0].turno_tipo} turnos={lista}
+          mostrarSucursal={sucursalesDistintas > 1} horarioPorDiaTurno={horarioPorDiaTurno}
+          usuario={usuario} onCambio={onCambio} onEditar={() => onEditarTurnos(lista[0].sucursal_id)} />
+      ))}
+      {otrosEventos.map((e) => (
+        <EventoItem key={e.id} evento={e} usuario={usuario} puedeEditar={puedeGestionarEvento(usuario, e)} onCambio={onCambio} onIniciarRun={onIniciarRun} />
       ))}
     </div>
   );
 }
 
-function EventoItem({ evento, usuario, puedeEditar, horarioPorDiaTurno, onCambio, onIniciarRun }) {
+// Un solo cuadro por turno (diurno/nocturno) del día en vez de un bloque por
+// cada colaborador asignado - cerrado muestra un resumen ("Cocina (3) ·
+// Caja (2)"), abierto lista los nombres agrupados por puesto. Editar
+// (agregar/quitar gente) se hace en Gestionar turnos, no acá - ver onEditar.
+function TurnoDelDia({ turnoTipo, turnos, mostrarSucursal, horarioPorDiaTurno, usuario, onCambio, onEditar }) {
+  const [abierto, setAbierto] = useState(false);
+  const puedeEditar = usuario.rol === 'ADMIN' || usuario.rol === 'GERENTE';
+  const porPuesto = new Map();
+  for (const t of turnos) {
+    if (!porPuesto.has(t.puesto)) porPuesto.set(t.puesto, []);
+    porPuesto.get(t.puesto).push(t);
+  }
+  const diaSemana = new Date(turnos[0].fecha_hora).getDay();
+  const horario = horarioPorDiaTurno?.get(`${diaSemana}|${turnoTipo}`);
+  const hayRevisionPendiente = turnos.some((t) => t.solicitud_revision_estado === 'PENDIENTE');
+
+  return (
+    <div className="border border-gray-200 rounded-lg p-3">
+      <button type="button" onClick={() => setAbierto((a) => !a)} className="w-full flex items-start justify-between gap-2 text-left">
+        <div>
+          <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${TIPO_COLOR.TURNO}`}>Turno</span>
+          <p className="text-sm font-medium text-gray-900 mt-1">
+            {turnoTipo === 'DIURNO' ? '☀️' : '🌙'} Turno {TURNO_TIPO_LABEL[turnoTipo]}{mostrarSucursal && ` · ${turnos[0].sucursal_nombre}`}
+          </p>
+          <p className="text-xs text-gray-400 mt-0.5">
+            {horario && `${horario.hora_desde.slice(0, 5)} a ${horario.hora_hasta.slice(0, 5)} · `}
+            {[...porPuesto.entries()].map(([p, lista]) => `${PUESTO_LABEL[p] || p} (${lista.length})`).join(' · ')}
+          </p>
+        </div>
+        <span className="text-gray-400 text-xs shrink-0 mt-1">{abierto ? '▲' : '▼'}</span>
+      </button>
+
+      {hayRevisionPendiente && !abierto && (
+        <p className="text-xs text-yellow-700 bg-yellow-50 rounded px-2 py-1 mt-2 italic">Hay una solicitud de revisión pendiente</p>
+      )}
+
+      {abierto && (
+        <div className="mt-3 space-y-2.5 border-t border-gray-100 pt-2.5">
+          {[...porPuesto.entries()].map(([puesto, lista]) => (
+            <div key={puesto}>
+              <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">{PUESTO_LABEL[puesto] || puesto} ({lista.length})</p>
+              <div className="mt-1 space-y-2">
+                {lista.map((t) => <TurnoPersonaLinea key={t.id} turno={t} usuario={usuario} onCambio={onCambio} />)}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {puedeEditar && (
+        <button type="button" onClick={onEditar} className="text-xs text-fat-bordo-600 hover:underline mt-2.5">
+          Editar turno
+        </button>
+      )}
+    </div>
+  );
+}
+
+// Línea de una persona dentro de un TurnoDelDia - solo lleva la acción de
+// "no puedo asistir" (si es el propio turno del colaborador); agregar/quitar
+// gente vive en Gestionar turnos.
+function TurnoPersonaLinea({ turno, usuario, onCambio }) {
+  const [solicitando, setSolicitando] = useState(false);
+  const [motivo, setMotivo] = useState('');
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState('');
+  const esMiTurno = usuario.rol === 'COLABORADOR' && turno.responsable_user_id === usuario.id;
+
+  async function solicitarRevision() {
+    if (!motivo.trim()) { setError('Elegí o escribí un motivo'); return; }
+    setGuardando(true);
+    setError('');
+    try {
+      await api.post(`/api/calendario/${turno.id}/solicitar-revision`, { motivo });
+      setSolicitando(false);
+      onCambio();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  return (
+    <div className="text-sm">
+      <div className="flex items-center gap-1.5">
+        {!turno.asignacion_confirmada && <span title="Pendiente de confirmar" className="text-xs">🕒</span>}
+        <span className={esMiTurno ? 'font-medium text-fat-bordo-700' : 'text-gray-800'}>{turno.responsable_nombre || '—'}</span>
+      </div>
+      {turno.solicitud_revision_estado === 'PENDIENTE' ? (
+        <p className="text-xs text-yellow-700 bg-yellow-50 rounded px-2 py-1 mt-1 italic">
+          Revisión pendiente: "{turno.solicitud_revision_motivo}"
+        </p>
+      ) : esMiTurno && (
+        solicitando ? (
+          <div className="space-y-2 mt-1">
+            <select className="w-full rounded-lg border border-gray-300 px-2 py-1 text-xs" value={motivo} onChange={(e) => setMotivo(e.target.value)}>
+              <option value="">Elegí un motivo…</option>
+              {MOTIVOS_PRESET.map((m) => <option key={m} value={m}>{m}</option>)}
+              <option value="__otro">Otro (escribir)</option>
+            </select>
+            {motivo === '__otro' && (
+              <input className="w-full rounded-lg border border-gray-300 px-2 py-1 text-xs" placeholder="Motivo" onChange={(e) => setMotivo(e.target.value)} />
+            )}
+            <div className="flex gap-2">
+              <Boton ancho="w-auto" cargando={guardando} onClick={solicitarRevision}>Enviar solicitud</Boton>
+              <Boton ancho="w-auto" variante="secundario" onClick={() => setSolicitando(false)}>Cancelar</Boton>
+            </div>
+          </div>
+        ) : (
+          <button type="button" onClick={() => setSolicitando(true)} className="text-xs text-fat-bordo-600 hover:underline mt-0.5">No puedo asistir</button>
+        )
+      )}
+      {error && <p className="text-xs text-fat-bordo-600 mt-1">{error}</p>}
+    </div>
+  );
+}
+
+function EventoItem({ evento, usuario, puedeEditar, onCambio, onIniciarRun }) {
   const [completando, setCompletando] = useState(false);
   const [comentario, setComentario] = useState('');
   const [archivo, setArchivo] = useState(null);
   const [iniciando, setIniciando] = useState(false);
   const [guardando, setGuardando] = useState(false);
-  const [solicitando, setSolicitando] = useState(false);
-  const [motivo, setMotivo] = useState('');
   const [error, setError] = useState('');
 
   const puedeCompletar = new Date(evento.fecha_hora) <= new Date();
@@ -613,44 +755,20 @@ function EventoItem({ evento, usuario, puedeEditar, horarioPorDiaTurno, onCambio
     }
   }
 
-  async function solicitarRevision() {
-    if (!motivo.trim()) { setError('Elegí o escribí un motivo'); return; }
-    setGuardando(true);
-    setError('');
-    try {
-      await api.post(`/api/calendario/${evento.id}/solicitar-revision`, { motivo });
-      setSolicitando(false);
-      onCambio();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setGuardando(false);
-    }
-  }
-
-  const esMiTurno = usuario.rol === 'COLABORADOR' && evento.tipo === 'TURNO' && evento.responsable_user_id === usuario.id;
-
-  // Rango real del turno (hora_desde/hora_hasta configurados en Sucursales)
-  // en vez de mostrar solo la hora de inicio - undefined si no hay una sola
-  // sucursal en vista (ver sucursalIdVista) o el día no está habilitado.
-  let horarioTurno = null;
-  if (evento.tipo === 'TURNO' && horarioPorDiaTurno) {
-    const diaSemana = new Date(evento.fecha_hora).getDay();
-    horarioTurno = horarioPorDiaTurno.get(`${diaSemana}|${evento.turno_tipo}`);
-  }
-
   return (
     <div className="border border-gray-200 rounded-lg p-3">
       <div className="flex items-start justify-between gap-2">
         <div>
           <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${colorEvento(evento)}`}>{etiquetaEvento(evento)}</span>
-          <p className="text-sm font-medium text-gray-900 mt-1">{iconoEvento(evento)} {evento.titulo}{evento.puesto ? ` · ${evento.puesto}` : ''}</p>
+          <p className="text-sm font-medium text-gray-900 mt-1">{iconoEvento(evento)} {evento.titulo}</p>
           <p className="text-xs text-gray-400">
             {evento.sucursal_nombre}
-            {horarioTurno
-              ? ` · ${horarioTurno.hora_desde.slice(0, 5)} a ${horarioTurno.hora_hasta.slice(0, 5)}`
-              : evento.tipo !== 'EVENTO_ESPECIAL' && evento.tipo !== 'SEGUIMIENTO' && ` · ${new Date(evento.fecha_hora).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}`}
-            {evento.responsable_nombre && ` · ${evento.responsable_nombre}`}
+            {evento.tipo !== 'EVENTO_ESPECIAL' && evento.tipo !== 'SEGUIMIENTO' && ` · ${new Date(evento.fecha_hora).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}`}
+            {evento.responsable_nombre
+              ? ` · ${evento.responsable_nombre}`
+              : (evento.tipo === 'TAREA' && evento.puesto && evento.turno_tipo)
+                ? ` · Colaboradores de ${PUESTO_LABEL[evento.puesto]} (turno ${TURNO_TIPO_LABEL[evento.turno_tipo]})`
+                : ''}
           </p>
           {evento.tarea_descripcion && <p className="text-xs text-gray-500 mt-1">{evento.tarea_descripcion}</p>}
         </div>
@@ -709,35 +827,6 @@ function EventoItem({ evento, usuario, puedeEditar, horarioPorDiaTurno, onCambio
       {evento.run_id && <p className="text-xs text-gray-400 mt-1">Ya iniciada</p>}
       {evento.completado_comentario && <p className="text-xs text-gray-600 mt-1 italic">"{evento.completado_comentario}"</p>}
 
-      {evento.tipo === 'TURNO' && evento.solicitud_revision_estado === 'PENDIENTE' && (
-        <p className="text-xs text-yellow-700 bg-yellow-50 rounded px-2 py-1 mt-2 italic">
-          Revisión pendiente: "{evento.solicitud_revision_motivo}"
-        </p>
-      )}
-
-      {esMiTurno && evento.solicitud_revision_estado !== 'PENDIENTE' && (
-        <div className="mt-2">
-          {solicitando ? (
-            <div className="space-y-2">
-              <select className="w-full rounded-lg border border-gray-300 px-2 py-1 text-xs" value={motivo} onChange={(e) => setMotivo(e.target.value)}>
-                <option value="">Elegí un motivo…</option>
-                {MOTIVOS_PRESET.map((m) => <option key={m} value={m}>{m}</option>)}
-                <option value="__otro">Otro (escribir)</option>
-              </select>
-              {motivo === '__otro' && (
-                <input className="w-full rounded-lg border border-gray-300 px-2 py-1 text-xs" placeholder="Motivo" onChange={(e) => setMotivo(e.target.value)} />
-              )}
-              <div className="flex gap-2">
-                <Boton ancho="w-auto" cargando={guardando} onClick={solicitarRevision}>Enviar solicitud</Boton>
-                <Boton ancho="w-auto" variante="secundario" onClick={() => setSolicitando(false)}>Cancelar</Boton>
-              </div>
-            </div>
-          ) : (
-            <Boton ancho="w-auto" variante="secundario" onClick={() => setSolicitando(true)}>No puedo asistir</Boton>
-          )}
-        </div>
-      )}
-
       {error && <p className="text-xs text-fat-bordo-600 mt-1">{error}</p>}
 
       {puedeEditar && (
@@ -771,6 +860,39 @@ function BloqueTipoAgendar({ icono, titulo, descripcion, onClick }) {
   );
 }
 
+// Elegir una o más personas para responsable de una TAREA - reusa
+// BuscadorResponsable para la búsqueda (por nombre; el propio buscador ya
+// muestra puesto/sucursal en cada resultado) y junta lo elegido en chips
+// abajo. `key={resetKey}` fuerza que el buscador vuelva a montarse (con el
+// input vacío) después de cada elección, en vez de agregar lógica de reset
+// adentro de BuscadorResponsable.
+function SelectorResponsablesTarea({ sucursalId, seleccionados, onChange }) {
+  const [resetKey, setResetKey] = useState(0);
+  function agregar(id, u) {
+    setResetKey((k) => k + 1);
+    if (!id || !u || seleccionados.some((s) => s.id === id)) return;
+    onChange([...seleccionados, { id, nombre: u.nombre || u.email }]);
+  }
+  function quitar(id) {
+    onChange(seleccionados.filter((s) => s.id !== id));
+  }
+  return (
+    <div>
+      <BuscadorResponsable key={resetKey} sucursalId={sucursalId} label="" onChange={agregar} />
+      {seleccionados.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mt-2">
+          {seleccionados.map((s) => (
+            <span key={s.id} className="inline-flex items-center gap-1 text-xs bg-gray-100 text-gray-700 rounded-full pl-2.5 pr-1 py-1">
+              {s.nombre}
+              <button type="button" onClick={() => quitar(s.id)} className="text-gray-400 hover:text-fat-bordo-600 leading-none">&times;</button>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ModalNuevoEvento({ sucursales, plantillas, usuario, sucursalEnVista, onClose, onCreado }) {
   const esGerente = usuario.rol === 'GERENTE';
   const esAdmin = usuario.rol === 'ADMIN';
@@ -781,6 +903,10 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, sucursalEnVista, on
     // Específico de TAREA:
     tareaCatalogoId: '', tituloOtro: '', fotoRequerida: false,
     tareaRecurrencia: 'NINGUNA', diasSemana: [], diasMes: [], sinHora: false, fechaHasta: '',
+    // Responsable de TAREA - dos modos excluyentes (ver resolverResponsablesTarea
+    // en el backend): una o más personas puntuales, o "según puesto y turno"
+    // (sin nadie fijo: la va a ver quien tenga ese puesto/turno cada día).
+    responsableModo: 'PERSONA', responsablesMultiples: [], responsablePuesto: '', responsableTurnoTipo: '',
     // Específico de EVENTO_ESPECIAL (null = todas las sucursales, array = selección manual):
     sucursalesEspecialesIds: null, icono: ICONO_EVENTO_ESPECIAL_DEFAULT,
   });
@@ -826,6 +952,14 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, sucursalEnVista, on
   const tareasDelTipoAbierto = tiposTarea.find((t) => String(t.id) === String(tipoTareaAbierto))?.tareas || [];
   const esOtro = form.tareaCatalogoId === '__otro';
 
+  function payloadResponsablesTarea() {
+    if (form.responsableModo === 'PUESTO') {
+      if (!form.responsablePuesto || !form.responsableTurnoTipo) throw new Error('Elegí puesto y turno');
+      return { responsable_puesto: form.responsablePuesto, responsable_turno_tipo: form.responsableTurnoTipo };
+    }
+    return { responsable_user_ids: form.responsablesMultiples.map((r) => r.id) };
+  }
+
   async function crear(e) {
     e.preventDefault();
     setError('');
@@ -858,7 +992,7 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, sucursalEnVista, on
           tarea_catalogo_id: esOtro ? null : Number(form.tareaCatalogoId) || null,
           titulo: esOtro ? form.tituloOtro : null,
           foto_requerida: esOtro ? form.fotoRequerida : undefined,
-          responsable_user_id: form.responsable_user_id || null,
+          ...payloadResponsablesTarea(),
           frecuencia: form.tareaRecurrencia,
           dias_semana: form.tareaRecurrencia === 'SEMANAL' ? form.diasSemana : undefined,
           dias_mes: form.tareaRecurrencia === 'MENSUAL' ? form.diasMes : undefined,
@@ -880,7 +1014,7 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, sucursalEnVista, on
           tarea_catalogo_id: form.tipo === 'TAREA' && !esOtro ? Number(form.tareaCatalogoId) || null : null,
           titulo: form.tipo === 'TAREA' && esOtro ? form.tituloOtro : null,
           foto_requerida: form.tipo === 'TAREA' && esOtro ? form.fotoRequerida : undefined,
-          responsable_user_id: form.responsable_user_id || null,
+          ...(form.tipo === 'TAREA' ? payloadResponsablesTarea() : { responsable_user_id: form.responsable_user_id || null }),
           fecha_hora: `${form.fecha}T${form.sinHora && form.tipo === 'TAREA' ? '00:00' : form.hora}:00`,
           hora_definida: form.tipo === 'TAREA' ? !form.sinHora : undefined,
           recurrencia: form.tipo !== 'TAREA' && form.recurrenciaTipo !== 'NINGUNA' ? { tipo: form.recurrenciaTipo, hasta: form.recurrenciaHasta } : null,
@@ -1024,13 +1158,51 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, sucursalEnVista, on
           </div>
         )}
 
-        <BuscadorResponsable
-          sucursalId={sucursalId}
-          todasLasSucursales={form.tipo === 'EVENTO_ESPECIAL' && form.sucursalesEspecialesIds === null}
-          nombreValue={form.responsable_nombre}
-          label={form.tipo === 'EVENTO_ESPECIAL' ? 'Responsable (opcional)' : 'Responsable'}
-          onChange={(id, u) => setForm({ ...form, responsable_user_id: id, responsable_nombre: u ? (u.nombre || u.email) : '' })}
-        />
+        {form.tipo !== 'TAREA' && (
+          <BuscadorResponsable
+            sucursalId={sucursalId}
+            todasLasSucursales={form.tipo === 'EVENTO_ESPECIAL' && form.sucursalesEspecialesIds === null}
+            nombreValue={form.responsable_nombre}
+            label={form.tipo === 'EVENTO_ESPECIAL' ? 'Responsable (opcional)' : 'Responsable'}
+            onChange={(id, u) => setForm({ ...form, responsable_user_id: id, responsable_nombre: u ? (u.nombre || u.email) : '' })}
+          />
+        )}
+
+        {form.tipo === 'TAREA' && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Responsable</label>
+            <div className="flex rounded-lg border border-gray-300 overflow-hidden text-xs mb-2 w-fit">
+              <button type="button" onClick={() => setForm({ ...form, responsableModo: 'PERSONA' })}
+                className={`px-3 py-1.5 ${form.responsableModo !== 'PUESTO' ? 'bg-fat-bordo-500 text-white' : 'bg-white text-gray-600'}`}>
+                Persona(s)
+              </button>
+              <button type="button" onClick={() => setForm({ ...form, responsableModo: 'PUESTO' })}
+                className={`px-3 py-1.5 ${form.responsableModo === 'PUESTO' ? 'bg-fat-bordo-500 text-white' : 'bg-white text-gray-600'}`}>
+                Según puesto y turno
+              </button>
+            </div>
+            {form.responsableModo === 'PUESTO' ? (
+              <div className="grid grid-cols-2 gap-3">
+                <Select label="Puesto" required value={form.responsablePuesto} onChange={(e) => setForm({ ...form, responsablePuesto: e.target.value })}>
+                  <option value="">Elegí un puesto</option>
+                  {PUESTOS.map((p) => <option key={p} value={p}>{PUESTO_LABEL[p]}</option>)}
+                </Select>
+                <Select label="Turno" required value={form.responsableTurnoTipo} onChange={(e) => setForm({ ...form, responsableTurnoTipo: e.target.value })}>
+                  <option value="">Elegí un turno</option>
+                  <option value="DIURNO">Diurno</option>
+                  <option value="NOCTURNO">Nocturno</option>
+                </Select>
+              </div>
+            ) : (
+              <SelectorResponsablesTarea sucursalId={sucursalId} seleccionados={form.responsablesMultiples} onChange={(v) => setForm({ ...form, responsablesMultiples: v })} />
+            )}
+            <p className="text-[11px] text-gray-400 mt-1">
+              {form.responsableModo === 'PUESTO'
+                ? 'Le va a aparecer, cada día, a quien esté trabajando ese puesto y turno según Gestionar turnos - sin depender de una persona fija.'
+                : 'Opcional. Podés elegir una o más personas - cada una la va a ver por separado.'}
+            </p>
+          </div>
+        )}
 
         {form.tipo === 'TAREA' ? (
           <div className="space-y-3">
