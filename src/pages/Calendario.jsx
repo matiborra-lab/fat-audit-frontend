@@ -860,37 +860,127 @@ function BloqueTipoAgendar({ icono, titulo, descripcion, onClick }) {
   );
 }
 
-// Elegir una o más personas para responsable de una TAREA - reusa
-// BuscadorResponsable para la búsqueda (por nombre; el propio buscador ya
-// muestra puesto/sucursal en cada resultado) y junta lo elegido en chips
-// abajo. `key={resetKey}` fuerza que el buscador vuelva a montarse (con el
-// input vacío) después de cada elección, en vez de agregar lógica de reset
-// adentro de BuscadorResponsable.
+// Opciones fijas "Responsables del sector X" - se mezclan con los resultados
+// de personas en el mismo buscador/lista de abajo (ver SelectorResponsablesTarea).
+const SECTORES_RESPONSABLE = PUESTOS.map((p) => ({ tipo: 'PUESTO', puesto: p, label: `Responsables del sector ${PUESTO_LABEL[p]}` }));
+
+// Responsable(s) de una TAREA: un solo buscador que mezcla personas puntuales
+// (por nombre, vía /api/usuarios/buscar) con las 3 opciones fijas de sector -
+// elegir cualquiera de las dos las agrega como chip abajo, sin necesidad de
+// alternar entre "modo persona" y "modo sector". El turno de un chip de
+// sector se resuelve solo a partir de la hora de la tarea (ver turnoParaHora),
+// no se pregunta acá.
 function SelectorResponsablesTarea({ sucursalId, seleccionados, onChange }) {
-  const [resetKey, setResetKey] = useState(0);
-  function agregar(id, u) {
-    setResetKey((k) => k + 1);
-    if (!id || !u || seleccionados.some((s) => s.id === id)) return;
-    onChange([...seleccionados, { id, nombre: u.nombre || u.email }]);
+  const [texto, setTexto] = useState('');
+  const [personas, setPersonas] = useState([]);
+  const [abierto, setAbierto] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    function alClickAfuera(e) { if (ref.current && !ref.current.contains(e.target)) setAbierto(false); }
+    document.addEventListener('mousedown', alClickAfuera);
+    return () => document.removeEventListener('mousedown', alClickAfuera);
+  }, []);
+
+  useEffect(() => {
+    if (!sucursalId) { setPersonas([]); return; }
+    const id = setTimeout(() => {
+      const params = new URLSearchParams({ sucursal_id: sucursalId });
+      if (texto) params.set('q', texto);
+      api.get(`/api/usuarios/buscar?${params}`).then(setPersonas).catch(() => setPersonas([]));
+    }, 250);
+    return () => clearTimeout(id);
+  }, [texto, sucursalId]);
+
+  const sectoresFiltrados = SECTORES_RESPONSABLE.filter((s) => !texto || s.label.toLowerCase().includes(texto.toLowerCase()));
+  const sectorYaElegido = (puesto) => seleccionados.some((s) => s.tipo === 'PUESTO' && s.puesto === puesto);
+  const personaYaElegida = (id) => seleccionados.some((s) => s.tipo === 'PERSONA' && s.id === id);
+
+  function agregarPersona(u) {
+    if (personaYaElegida(u.id)) return;
+    onChange([...seleccionados, { tipo: 'PERSONA', id: u.id, nombre: u.nombre || u.email }]);
+    setTexto(''); setAbierto(false);
   }
-  function quitar(id) {
-    onChange(seleccionados.filter((s) => s.id !== id));
+  function agregarSector(s) {
+    if (sectorYaElegido(s.puesto)) return;
+    onChange([...seleccionados, s]);
+    setTexto(''); setAbierto(false);
   }
+  function quitar(item) {
+    onChange(seleccionados.filter((s) => s !== item));
+  }
+
   return (
-    <div>
-      <BuscadorResponsable key={resetKey} sucursalId={sucursalId} label="" onChange={agregar} />
+    <div ref={ref} className="relative">
+      <input
+        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-fat-bordo-400"
+        placeholder={sucursalId ? 'Buscar por nombre, o "sector"…' : 'Elegí primero una sucursal'}
+        disabled={!sucursalId}
+        value={texto}
+        onChange={(e) => { setTexto(e.target.value); setAbierto(true); }}
+        onFocus={() => setAbierto(true)}
+      />
+      {abierto && (sectoresFiltrados.length > 0 || personas.length > 0) && (
+        <div className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto">
+          {sectoresFiltrados.map((s) => (
+            <button
+              key={s.puesto}
+              type="button"
+              disabled={sectorYaElegido(s.puesto)}
+              onClick={() => agregarSector(s)}
+              className="w-full text-left px-3 py-2 hover:bg-gray-50 text-sm border-b border-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <span className="font-medium text-gray-900">👥 {s.label}</span>
+              <span className="block text-[11px] text-gray-400">Según quién esté trabajando ese sector cada turno</span>
+            </button>
+          ))}
+          {personas.map((u) => (
+            <button
+              key={u.id}
+              type="button"
+              disabled={personaYaElegida(u.id)}
+              onClick={() => agregarPersona(u)}
+              className="w-full text-left px-3 py-2 hover:bg-gray-50 text-sm disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <span className="font-medium text-gray-900">{u.nombre || u.email}</span>
+              {u.puesto && <span className="text-xs text-gray-400 ml-1.5">{PUESTO_LABEL[u.puesto] || u.puesto}</span>}
+            </button>
+          ))}
+        </div>
+      )}
       {seleccionados.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mt-2">
           {seleccionados.map((s) => (
-            <span key={s.id} className="inline-flex items-center gap-1 text-xs bg-gray-100 text-gray-700 rounded-full pl-2.5 pr-1 py-1">
-              {s.nombre}
-              <button type="button" onClick={() => quitar(s.id)} className="text-gray-400 hover:text-fat-bordo-600 leading-none">&times;</button>
+            <span key={s.tipo === 'PUESTO' ? `sector-${s.puesto}` : `persona-${s.id}`} className="inline-flex items-center gap-1 text-xs bg-gray-100 text-gray-700 rounded-full pl-2.5 pr-1 py-1">
+              {s.tipo === 'PUESTO' ? `👥 ${s.label}` : s.nombre}
+              <button type="button" onClick={() => quitar(s)} className="text-gray-400 hover:text-fat-bordo-600 leading-none">&times;</button>
             </span>
           ))}
         </div>
       )}
     </div>
   );
+}
+
+// A qué turno (DIURNO/NOCTURNO) corresponde una hora puntual, según el
+// horario configurado de la sucursal para el día de semana de `fechaISO`
+// (mismo criterio que arma un turno real, ver armarOcurrencia en el
+// backend) - null si esa hora no cae dentro de ningún turno habilitado.
+function turnoParaHora(horariosSucursal, horaHHMM, fechaISO) {
+  if (!horaHHMM || !fechaISO || !horariosSucursal?.length) return null;
+  const diaSemana = new Date(`${fechaISO}T00:00:00`).getDay();
+  const [h, m] = horaHHMM.split(':').map(Number);
+  const minutos = h * 60 + m;
+  for (const tipo of ['DIURNO', 'NOCTURNO']) {
+    const cfg = horariosSucursal.find((r) => r.dia_semana === diaSemana && r.turno_tipo === tipo && r.habilitado);
+    if (!cfg) continue;
+    const [hd, md] = cfg.hora_desde.split(':').map(Number);
+    const [hh, mh] = cfg.hora_hasta.split(':').map(Number);
+    const desde = hd * 60 + md, hasta = hh * 60 + mh;
+    const dentro = hasta <= desde ? (minutos >= desde || minutos < hasta) : (minutos >= desde && minutos < hasta);
+    if (dentro) return tipo;
+  }
+  return null;
 }
 
 function ModalNuevoEvento({ sucursales, plantillas, usuario, sucursalEnVista, onClose, onCreado }) {
@@ -903,10 +993,10 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, sucursalEnVista, on
     // Específico de TAREA:
     tareaCatalogoId: '', tituloOtro: '', fotoRequerida: false,
     tareaRecurrencia: 'NINGUNA', diasSemana: [], diasMes: [], sinHora: false, fechaHasta: '',
-    // Responsable de TAREA - dos modos excluyentes (ver resolverResponsablesTarea
-    // en el backend): una o más personas puntuales, o "según puesto y turno"
-    // (sin nadie fijo: la va a ver quien tenga ese puesto/turno cada día).
-    responsableModo: 'PERSONA', responsablesMultiples: [], responsablePuesto: '', responsableTurnoTipo: '',
+    // Responsable(s) de TAREA - lista mixta de personas puntuales y/o
+    // "sectores" (ver SelectorResponsablesTarea); un chip de sector no lleva
+    // turno propio, se resuelve solo a partir de la hora (ver turnoParaHora).
+    responsablesTarea: [],
     // Específico de EVENTO_ESPECIAL (null = todas las sucursales, array = selección manual):
     sucursalesEspecialesIds: null, icono: ICONO_EVENTO_ESPECIAL_DEFAULT,
   });
@@ -945,6 +1035,16 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, sucursalEnVista, on
     }
   }, [form.tipo, sucursalId]);
 
+  // Horario de turnos de la sucursal - solo para resolver a qué turno
+  // (diurno/nocturno) corresponde la hora elegida, cuando hay algún
+  // responsable "por sector" (ver turnoParaHora/payloadResponsablesTarea).
+  const [horariosSucursal, setHorariosSucursal] = useState([]);
+  useEffect(() => {
+    if (form.tipo === 'TAREA' && sucursalId) {
+      api.get(`/api/sucursales/${sucursalId}/horario-turnos`).then(setHorariosSucursal).catch(() => setHorariosSucursal([]));
+    }
+  }, [form.tipo, sucursalId]);
+
   // El 2do select ("Tarea") muestra las tareas del tipo elegido en el 1er
   // select + una opción fija "Otro" al final - se busca por tipoTareaAbierto
   // (que puede diferir del tipo real de la tarea ya elegida) para no perder
@@ -953,11 +1053,21 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, sucursalEnVista, on
   const esOtro = form.tareaCatalogoId === '__otro';
 
   function payloadResponsablesTarea() {
-    if (form.responsableModo === 'PUESTO') {
-      if (!form.responsablePuesto || !form.responsableTurnoTipo) throw new Error('Elegí puesto y turno');
-      return { responsable_puesto: form.responsablePuesto, responsable_turno_tipo: form.responsableTurnoTipo };
+    const personas = form.responsablesTarea.filter((r) => r.tipo === 'PERSONA');
+    const sectores = form.responsablesTarea.filter((r) => r.tipo === 'PUESTO');
+    if (!sectores.length) {
+      return { responsables: personas.map((p) => ({ tipo: 'PERSONA', user_id: p.id })) };
     }
-    return { responsable_user_ids: form.responsablesMultiples.map((r) => r.id) };
+    const horaEfectiva = form.sinHora ? null : form.hora;
+    if (!horaEfectiva) throw new Error('Elegí una hora para poder asignar por sector - así se sabe si es turno diurno o nocturno');
+    const turno = turnoParaHora(horariosSucursal, horaEfectiva, form.fecha);
+    if (!turno) throw new Error('Esa sucursal no tiene un turno habilitado que incluya esa hora ese día');
+    return {
+      responsables: [
+        ...personas.map((p) => ({ tipo: 'PERSONA', user_id: p.id })),
+        ...sectores.map((s) => ({ tipo: 'PUESTO', puesto: s.puesto, turno_tipo: turno })),
+      ],
+    };
   }
 
   async function crear(e) {
@@ -1170,36 +1280,11 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, sucursalEnVista, on
 
         {form.tipo === 'TAREA' && (
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Responsable</label>
-            <div className="flex rounded-lg border border-gray-300 overflow-hidden text-xs mb-2 w-fit">
-              <button type="button" onClick={() => setForm({ ...form, responsableModo: 'PERSONA' })}
-                className={`px-3 py-1.5 ${form.responsableModo !== 'PUESTO' ? 'bg-fat-bordo-500 text-white' : 'bg-white text-gray-600'}`}>
-                Persona(s)
-              </button>
-              <button type="button" onClick={() => setForm({ ...form, responsableModo: 'PUESTO' })}
-                className={`px-3 py-1.5 ${form.responsableModo === 'PUESTO' ? 'bg-fat-bordo-500 text-white' : 'bg-white text-gray-600'}`}>
-                Según puesto y turno
-              </button>
-            </div>
-            {form.responsableModo === 'PUESTO' ? (
-              <div className="grid grid-cols-2 gap-3">
-                <Select label="Puesto" required value={form.responsablePuesto} onChange={(e) => setForm({ ...form, responsablePuesto: e.target.value })}>
-                  <option value="">Elegí un puesto</option>
-                  {PUESTOS.map((p) => <option key={p} value={p}>{PUESTO_LABEL[p]}</option>)}
-                </Select>
-                <Select label="Turno" required value={form.responsableTurnoTipo} onChange={(e) => setForm({ ...form, responsableTurnoTipo: e.target.value })}>
-                  <option value="">Elegí un turno</option>
-                  <option value="DIURNO">Diurno</option>
-                  <option value="NOCTURNO">Nocturno</option>
-                </Select>
-              </div>
-            ) : (
-              <SelectorResponsablesTarea sucursalId={sucursalId} seleccionados={form.responsablesMultiples} onChange={(v) => setForm({ ...form, responsablesMultiples: v })} />
-            )}
+            <label className="block text-sm font-medium text-gray-700 mb-1">Responsable/s</label>
+            <SelectorResponsablesTarea sucursalId={sucursalId} seleccionados={form.responsablesTarea} onChange={(v) => setForm({ ...form, responsablesTarea: v })} />
             <p className="text-[11px] text-gray-400 mt-1">
-              {form.responsableModo === 'PUESTO'
-                ? 'Le va a aparecer, cada día, a quien esté trabajando ese puesto y turno según Gestionar turnos - sin depender de una persona fija.'
-                : 'Opcional. Podés elegir una o más personas - cada una la va a ver por separado.'}
+              Opcional. Buscá una o más personas, o elegí "Responsables del sector…" para que la vea quien esté
+              trabajando ese sector cada turno (necesita una hora, para saber si es diurno o nocturno).
             </p>
           </div>
         )}
@@ -1208,6 +1293,7 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, sucursalEnVista, on
           <div className="space-y-3">
             <Select label="Repetir" value={form.tareaRecurrencia} onChange={(e) => setForm({ ...form, tareaRecurrencia: e.target.value, diasSemana: [], diasMes: [] })}>
               <option value="NINGUNA">No se repite (una sola vez)</option>
+              <option value="DIARIA">Diariamente</option>
               <option value="SEMANAL">Semanalmente, ciertos días</option>
               <option value="MENSUAL">Mensualmente, ciertos días del mes</option>
             </Select>
