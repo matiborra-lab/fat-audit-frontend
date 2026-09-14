@@ -288,7 +288,7 @@ export function SelectorEmojiCatalogo({ valor, onChange, defecto = '📝' }) {
 // explícita, así "todas" y "ninguna elegida todavía" son estados distintos
 // y se puede destildar "Todas" sin que sea un no-op. Compartido entre
 // Calendario (filtro) y Tareas (filtro admin de historial).
-export function SelectorSucursalesMultiple({ sucursales, seleccionadas, onChange }) {
+export function SelectorSucursalesMultiple({ sucursales, seleccionadas, onChange, icono }) {
   const [abierto, setAbierto] = useState(false);
   const ref = useRef(null);
   useEffect(() => {
@@ -311,8 +311,8 @@ export function SelectorSucursalesMultiple({ sucursales, seleccionadas, onChange
       : sucursales.filter((s) => seleccionadas.includes(s.id)).map((s) => s.nombre).join(', ');
   return (
     <div ref={ref} className="relative">
-      <button type="button" onClick={() => setAbierto((a) => !a)} className="rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white text-gray-700 max-w-[220px] truncate">
-        {etiqueta}
+      <button type="button" onClick={() => setAbierto((a) => !a)} className="flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white text-gray-700 max-w-[220px]">
+        {icono && <span className="shrink-0">{icono}</span>}<span className="truncate">{etiqueta}</span>
       </button>
       {abierto && (
         <div className="absolute z-20 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-2 min-w-[200px]">

@@ -24,6 +24,19 @@ const TIPO_ICONO = { AUDITORIA: '📋', AUDITORIA_INTERNA: '📋', SEGUIMIENTO: 
 const ICONO_TAREA_DEFAULT = '📝';
 const ICONO_EVENTO_ESPECIAL_DEFAULT = '🎉';
 
+// Chips de resumen de la tarjeta del día en vista Semana (agrupa todo lo que
+// no sea Turno, que ya tiene su propio ícono sol/luna aparte) - un ícono fijo
+// por categoría (no el de cada evento puntual, que puede variar) más un
+// singular/plural para el label en desktop.
+const RESUMEN_TIPO = {
+  TAREA: { icono: '📝', singular: 'tarea', plural: 'tareas', color: 'bg-fat-amarillo-100 text-fat-amarillo-800' },
+  AUDITORIA: { icono: '📋', singular: 'auditoría', plural: 'auditorías', color: 'bg-fat-bordo-100 text-fat-bordo-700' },
+  SEGUIMIENTO: { icono: '📋', singular: 'seguimiento', plural: 'seguimientos', color: 'bg-orange-100 text-orange-700' },
+  EVENTO_ESPECIAL: { icono: '⭐', singular: 'evento', plural: 'eventos', color: 'bg-pink-100 text-pink-700' },
+  FERIADO: { icono: '🇦🇷', singular: 'feriado', plural: 'feriados', color: 'bg-sky-100 text-sky-800' },
+  CUMPLEANOS: { icono: '🎂', singular: 'cumpleaños', plural: 'cumpleaños', color: 'bg-fuchsia-100 text-fuchsia-800' },
+};
+
 // Ícono chico "al costado del nombre" del evento: fijo por tipo (Auditoría/
 // Seguimiento/Feriado/Cumpleaños), el de una Tarea sale del tipo de tarea
 // elegido en Configuración (no se elige al programarla), y el de un Evento
@@ -101,8 +114,8 @@ function SelectorTiposMultiple({ seleccionados, onChange }) {
     : seleccionados.map((v) => TIPOS_FILTRO.find((t) => t.valor === v)?.label).join(', ');
   return (
     <div ref={ref} className="relative">
-      <button type="button" onClick={() => setAbierto((a) => !a)} className="rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white text-gray-700 max-w-[220px] truncate">
-        {etiqueta}
+      <button type="button" onClick={() => setAbierto((a) => !a)} className="flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white text-gray-700 max-w-[220px]">
+        <span className="shrink-0">🏷️</span><span className="truncate">{etiqueta}</span>
       </button>
       {abierto && (
         <div className="absolute z-20 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-2 space-y-1 min-w-[180px]">
@@ -118,11 +131,80 @@ function SelectorTiposMultiple({ seleccionados, onChange }) {
   );
 }
 
+// Tarjeta de un día en la vista Semana (rediseño) - Turno se resume con
+// sol/luna en vez de texto (o "Libre" si no hay ninguno programado), y el
+// resto de los tipos se agrupa en chips ícono+cantidad (con label en
+// desktop, solo el número en mobile - ver RESUMEN_TIPO). Tocar la tarjeta
+// no abre nada aparte: solo cambia qué día muestra el panel "Detalle del
+// día" de más abajo.
+function DiaCardSemana({ dia, etiqueta, esHoy, seleccionado, eventosDia, feriadosDia, cumpleanosDia, climaDia: climaDiaRaw, onClick }) {
+  const climaDia = climaDiaRaw?.temp_max != null ? climaDiaRaw : null;
+  const turnos = eventosDia.filter((e) => e.tipo === 'TURNO');
+  const tiposTurno = new Set(turnos.map((t) => t.turno_tipo));
+  const conteos = new Map();
+  for (const e of eventosDia) {
+    if (e.tipo === 'TURNO') continue;
+    conteos.set(e.tipo, (conteos.get(e.tipo) || 0) + 1);
+  }
+  if (feriadosDia.length) conteos.set('FERIADO', (conteos.get('FERIADO') || 0) + feriadosDia.length);
+  if (cumpleanosDia.length) conteos.set('CUMPLEANOS', (conteos.get('CUMPLEANOS') || 0) + cumpleanosDia.length);
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex flex-col items-center gap-2 rounded-xl border-2 bg-white px-2 py-3 text-center transition-colors ${
+        seleccionado ? 'border-fat-bordo-500 bg-fat-bordo-50/50' : 'border-gray-200 hover:border-fat-bordo-200 hover:bg-gray-50'
+      }`}
+    >
+      <div className="flex items-center gap-1.5">
+        <span className={`text-xs font-medium ${seleccionado ? 'text-fat-bordo-700' : 'text-gray-500'}`}>{etiqueta}</span>
+        {climaDia && (
+          <span className="text-[9px] text-gray-400" title={`${Math.round(climaDia.temp_min)}° / ${Math.round(climaDia.temp_max)}°`}>
+            {emojiClima(climaDia.weather_code)}
+          </span>
+        )}
+      </div>
+      <span className={`text-lg font-bold ${esHoy ? 'text-fat-bordo-600' : 'text-gray-900'}`}>{dia.getDate()}</span>
+
+      {tiposTurno.size === 0 ? (
+        <div className="flex flex-col items-center gap-1">
+          <span className="w-9 h-9 rounded-full bg-gray-100 text-gray-400 flex items-center justify-center text-base leading-none">—</span>
+          <span className="text-[10px] text-gray-400">Libre</span>
+        </div>
+      ) : (
+        <div className="flex gap-1">
+          {tiposTurno.has('DIURNO') && (
+            <span className="w-9 h-9 rounded-full bg-fat-amarillo-100 flex items-center justify-center text-base" title="Turno diurno">☀️</span>
+          )}
+          {tiposTurno.has('NOCTURNO') && (
+            <span className="w-9 h-9 rounded-full bg-purple-100 flex items-center justify-center text-base" title="Turno nocturno">🌙</span>
+          )}
+        </div>
+      )}
+
+      {conteos.size > 0 && (
+        <div className="flex flex-col items-center gap-1">
+          {[...conteos.entries()].map(([tipo, n]) => {
+            const info = RESUMEN_TIPO[tipo];
+            if (!info) return null;
+            return (
+              <span key={tipo} className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap ${info.color}`}>
+                {info.icono} {n}<span className="hidden sm:inline">&nbsp;{n === 1 ? info.singular : info.plural}</span>
+              </span>
+            );
+          })}
+        </div>
+      )}
+    </button>
+  );
+}
+
 export default function Calendario() {
   const { usuario } = useAuth();
   const navigate = useNavigate();
   const hoy = new Date();
-  const [vista, setVista] = useState('MES'); // MES | SEMANA
+  const [vista, setVista] = useState('SEMANA'); // MES | SEMANA - Semana es la vista por default (ver pedido de rediseño)
   const [ancla, setAncla] = useState(hoy);
   const [eventos, setEventos] = useState(null);
   const [sucursales, setSucursales] = useState([]);
@@ -149,6 +231,16 @@ export default function Calendario() {
     api.get(`/api/sucursales/${sucursalIdVista}/clima`).then(setClima).catch(() => setClima([]));
   }, [sucursalIdVista]);
   const climaPorDia = useMemo(() => new Map(clima.map((c) => [c.fecha, c])), [clima]);
+
+  // Horario real de cada turno (hora_desde/hora_hasta) para mostrar el rango
+  // completo en el detalle del día en vez de solo la hora de inicio - mismo
+  // criterio que el clima: solo tiene sentido con UNA sucursal puntual en vista.
+  const [horarios, setHorarios] = useState([]);
+  useEffect(() => {
+    if (!sucursalIdVista) { setHorarios([]); return; }
+    api.get(`/api/sucursales/${sucursalIdVista}/horario-turnos`).then(setHorarios).catch(() => setHorarios([]));
+  }, [sucursalIdVista]);
+  const horarioPorDiaTurno = useMemo(() => new Map(horarios.map((h) => [`${h.dia_semana}|${h.turno_tipo}`, h])), [horarios]);
 
   // Cumpleaños: mismo criterio que el clima (solo con una sucursal puntual
   // en vista) - pide el/los años que la grilla visible cruza.
@@ -223,6 +315,16 @@ export default function Calendario() {
     setAncla(nueva);
   }
 
+  // El detalle del día ya no es un modal que hay que abrir - vive siempre
+  // visible debajo de la grilla, arrancando en hoy (o el primer día visible
+  // si hoy quedó fuera del rango) para no mostrar un panel vacío al entrar.
+  useEffect(() => {
+    if (diaSeleccionado && diasVisibles.some((d) => aClaveDia(d) === aClaveDia(diaSeleccionado))) return;
+    const hoyEnRango = diasVisibles.find((d) => aClaveDia(d) === aClaveDia(hoy));
+    setDiaSeleccionado(hoyEnRango || diasVisibles[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vista, ancla.getFullYear(), ancla.getMonth(), ancla.getDate()]);
+
   if (!eventos) return <Cargando />;
 
   const eventosDelDiaSeleccionado = diaSeleccionado ? eventosPorDia.get(aClaveDia(diaSeleccionado)) || [] : [];
@@ -252,75 +354,98 @@ export default function Calendario() {
           <button onClick={() => setVista('SEMANA')} className={`px-3 py-1 ${vista === 'SEMANA' ? 'bg-fat-bordo-500 text-white' : 'bg-white text-gray-600'}`}>Semana</button>
         </div>
         {veTodasSucursales && (
-          <SelectorSucursalesMultiple sucursales={sucursales} seleccionadas={filtroSucursales} onChange={setFiltroSucursales} />
+          <SelectorSucursalesMultiple icono="🏢" sucursales={sucursales} seleccionadas={filtroSucursales} onChange={setFiltroSucursales} />
         )}
         <SelectorTiposMultiple seleccionados={filtroTipos} onChange={setFiltroTipos} />
       </div>
 
       {error && <p className="text-sm text-fat-bordo-600">{error}</p>}
 
-      <div className={`grid grid-cols-7 gap-px bg-gray-200 rounded-xl overflow-hidden border border-gray-200`}>
-        {DIAS_SEMANA.map((d) => (
-          <div key={d} className="bg-gray-50 text-center text-xs font-medium text-gray-500 py-2">{d}</div>
-        ))}
-        {diasVisibles.map((d, i) => {
-          const delMes = vista === 'MES' ? d.getMonth() === ancla.getMonth() : true;
-          const esHoy = aClaveDia(d) === aClaveDia(hoy);
-          const feriadosDia = feriadosPorDia.get(aClaveDia(d)) || [];
-          const cumpleanosDia = cumpleanosPorDia.get(aClaveDia(d)) || [];
-          const eventosDia = eventosPorDia.get(aClaveDia(d)) || [];
-          const maxVisibles = vista === 'SEMANA' ? 6 : 2;
-          const climaDiaRaw = climaPorDia.get(aClaveDia(d));
-          const climaDia = climaDiaRaw?.temp_max != null ? climaDiaRaw : null;
-          return (
-            <button
+      {vista === 'SEMANA' ? (
+        <div className="grid grid-cols-3 sm:grid-cols-7 gap-2">
+          {diasVisibles.map((d, i) => (
+            <DiaCardSemana
               key={i}
+              dia={d}
+              etiqueta={DIAS_SEMANA[i]}
+              esHoy={aClaveDia(d) === aClaveDia(hoy)}
+              seleccionado={diaSeleccionado && aClaveDia(d) === aClaveDia(diaSeleccionado)}
+              eventosDia={eventosPorDia.get(aClaveDia(d)) || []}
+              feriadosDia={feriadosPorDia.get(aClaveDia(d)) || []}
+              cumpleanosDia={cumpleanosPorDia.get(aClaveDia(d)) || []}
+              climaDia={climaPorDia.get(aClaveDia(d))}
               onClick={() => setDiaSeleccionado(d)}
-              className={`bg-white text-left align-top hover:bg-gray-50 ${vista === 'SEMANA' ? 'min-h-[220px] p-2' : 'min-h-[84px] p-1.5'} ${!delMes ? 'opacity-40' : ''}`}
-            >
-              <div className="flex items-center justify-between gap-1">
-                <span className={`text-xs inline-flex items-center justify-center w-5 h-5 rounded-full shrink-0 ${esHoy ? 'bg-fat-bordo-500 text-white font-semibold' : 'text-gray-600'}`}>
-                  {d.getDate()}
-                </span>
-                {climaDia && (
-                  <span className="text-[9px] text-gray-400 truncate" title={`${Math.round(climaDia.temp_min)}° / ${Math.round(climaDia.temp_max)}°`}>
-                    {emojiClima(climaDia.weather_code)} {Math.round(climaDia.temp_max)}°
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-7 gap-px bg-gray-200 rounded-xl overflow-hidden border border-gray-200">
+          {DIAS_SEMANA.map((d) => (
+            <div key={d} className="bg-gray-50 text-center text-xs font-medium text-gray-500 py-2">{d}</div>
+          ))}
+          {diasVisibles.map((d, i) => {
+            const delMes = d.getMonth() === ancla.getMonth();
+            const esHoy = aClaveDia(d) === aClaveDia(hoy);
+            const feriadosDia = feriadosPorDia.get(aClaveDia(d)) || [];
+            const cumpleanosDia = cumpleanosPorDia.get(aClaveDia(d)) || [];
+            const eventosDia = eventosPorDia.get(aClaveDia(d)) || [];
+            const climaDiaRaw = climaPorDia.get(aClaveDia(d));
+            const climaDia = climaDiaRaw?.temp_max != null ? climaDiaRaw : null;
+            return (
+              <button
+                key={i}
+                onClick={() => setDiaSeleccionado(d)}
+                className={`bg-white text-left align-top hover:bg-gray-50 min-h-[84px] p-1.5 ${!delMes ? 'opacity-40' : ''} ${diaSeleccionado && aClaveDia(d) === aClaveDia(diaSeleccionado) ? 'ring-2 ring-inset ring-fat-bordo-400' : ''}`}
+              >
+                <div className="flex items-center justify-between gap-1">
+                  <span className={`text-xs inline-flex items-center justify-center w-5 h-5 rounded-full shrink-0 ${esHoy ? 'bg-fat-bordo-500 text-white font-semibold' : 'text-gray-600'}`}>
+                    {d.getDate()}
                   </span>
-                )}
-              </div>
-              <div className="mt-1 space-y-0.5">
-                {feriadosDia.map((f) => (
-                  <p key={`feriado-${f.fecha}-${f.nombre}`} className={`text-[10px] px-1 py-0.5 rounded truncate ${TIPO_COLOR.FERIADO}`} title={`${FERIADO_TIPO_LABEL[f.tipo] || 'Feriado'}: ${f.nombre}`}>
-                    {TIPO_ICONO.FERIADO} {f.nombre}
-                  </p>
-                ))}
-                {cumpleanosDia.map((c) => (
-                  <p key={`cumple-${c.usuario_id}`} className={`text-[10px] px-1 py-0.5 rounded truncate ${TIPO_COLOR.CUMPLEANOS}`} title={`Cumpleaños de ${c.nombre || c.email}`}>
-                    {TIPO_ICONO.CUMPLEANOS} {c.nombre || c.email}
-                  </p>
-                ))}
-                {eventosDia.slice(0, maxVisibles).map((e) => (
-                  <p key={e.id} className={`text-[10px] px-1 py-0.5 rounded truncate ${colorEvento(e)}`} title={etiquetaEvento(e)}>{iconoEvento(e)} {e.titulo}</p>
-                ))}
-                {eventosDia.length > maxVisibles && <p className="text-[10px] text-gray-400">+{eventosDia.length - maxVisibles} más</p>}
-              </div>
-            </button>
-          );
-        })}
-      </div>
-
-      {diaSeleccionado && (
-        <Modal titulo={diaSeleccionado.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })} onClose={() => setDiaSeleccionado(null)}>
-          <DiaDetalle
-            eventos={eventosDelDiaSeleccionado}
-            feriados={feriadosDelDiaSeleccionado}
-            cumpleanos={cumpleanosDelDiaSeleccionado}
-            usuario={usuario}
-            onCambio={() => { recargar(); setToast('Actualizado'); }}
-            onIniciarRun={(runId) => navigate(`/ejecucion/${runId}`)}
-          />
-        </Modal>
+                  {climaDia && (
+                    <span className="text-[9px] text-gray-400 truncate" title={`${Math.round(climaDia.temp_min)}° / ${Math.round(climaDia.temp_max)}°`}>
+                      {emojiClima(climaDia.weather_code)} {Math.round(climaDia.temp_max)}°
+                    </span>
+                  )}
+                </div>
+                <div className="mt-1 space-y-0.5">
+                  {feriadosDia.map((f) => (
+                    <p key={`feriado-${f.fecha}-${f.nombre}`} className={`text-[10px] px-1 py-0.5 rounded truncate ${TIPO_COLOR.FERIADO}`} title={`${FERIADO_TIPO_LABEL[f.tipo] || 'Feriado'}: ${f.nombre}`}>
+                      {TIPO_ICONO.FERIADO} {f.nombre}
+                    </p>
+                  ))}
+                  {cumpleanosDia.map((c) => (
+                    <p key={`cumple-${c.usuario_id}`} className={`text-[10px] px-1 py-0.5 rounded truncate ${TIPO_COLOR.CUMPLEANOS}`} title={`Cumpleaños de ${c.nombre || c.email}`}>
+                      {TIPO_ICONO.CUMPLEANOS} {c.nombre || c.email}
+                    </p>
+                  ))}
+                  {eventosDia.slice(0, 2).map((e) => (
+                    <p key={e.id} className={`text-[10px] px-1 py-0.5 rounded truncate ${colorEvento(e)}`} title={etiquetaEvento(e)}>{iconoEvento(e)} {e.titulo}</p>
+                  ))}
+                  {eventosDia.length > 2 && <p className="text-[10px] text-gray-400">+{eventosDia.length - 2} más</p>}
+                </div>
+              </button>
+            );
+          })}
+        </div>
       )}
+
+      <Tarjeta className="p-4">
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <h2 className="font-semibold text-gray-900">Detalle del día</h2>
+          <span className="text-sm font-medium text-fat-bordo-600 capitalize">
+            {diaSeleccionado?.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })}
+          </span>
+        </div>
+        <DiaDetalle
+          eventos={eventosDelDiaSeleccionado}
+          feriados={feriadosDelDiaSeleccionado}
+          cumpleanos={cumpleanosDelDiaSeleccionado}
+          horarioPorDiaTurno={horarioPorDiaTurno}
+          usuario={usuario}
+          onCambio={() => { recargar(); setToast('Actualizado'); }}
+          onIniciarRun={(runId) => navigate(`/ejecucion/${runId}`)}
+        />
+      </Tarjeta>
 
       {modalNuevo && (
         <ModalNuevoEvento
@@ -348,7 +473,7 @@ function puedeGestionarEvento(usuario, evento) {
   return false;
 }
 
-function DiaDetalle({ eventos, feriados, cumpleanos, usuario, onCambio, onIniciarRun }) {
+function DiaDetalle({ eventos, feriados, cumpleanos, horarioPorDiaTurno, usuario, onCambio, onIniciarRun }) {
   if (eventos.length === 0 && feriados.length === 0 && cumpleanos.length === 0) return <p className="text-sm text-gray-400">No hay eventos este día.</p>;
   return (
     <div className="space-y-3">
@@ -365,13 +490,13 @@ function DiaDetalle({ eventos, feriados, cumpleanos, usuario, onCambio, onInicia
         </div>
       ))}
       {eventos.map((e) => (
-        <EventoItem key={e.id} evento={e} usuario={usuario} puedeEditar={puedeGestionarEvento(usuario, e)} onCambio={onCambio} onIniciarRun={onIniciarRun} />
+        <EventoItem key={e.id} evento={e} usuario={usuario} puedeEditar={puedeGestionarEvento(usuario, e)} horarioPorDiaTurno={horarioPorDiaTurno} onCambio={onCambio} onIniciarRun={onIniciarRun} />
       ))}
     </div>
   );
 }
 
-function EventoItem({ evento, usuario, puedeEditar, onCambio, onIniciarRun }) {
+function EventoItem({ evento, usuario, puedeEditar, horarioPorDiaTurno, onCambio, onIniciarRun }) {
   const [completando, setCompletando] = useState(false);
   const [comentario, setComentario] = useState('');
   const [archivo, setArchivo] = useState(null);
@@ -442,6 +567,15 @@ function EventoItem({ evento, usuario, puedeEditar, onCambio, onIniciarRun }) {
 
   const esMiTurno = usuario.rol === 'COLABORADOR' && evento.tipo === 'TURNO' && evento.responsable_user_id === usuario.id;
 
+  // Rango real del turno (hora_desde/hora_hasta configurados en Sucursales)
+  // en vez de mostrar solo la hora de inicio - undefined si no hay una sola
+  // sucursal en vista (ver sucursalIdVista) o el día no está habilitado.
+  let horarioTurno = null;
+  if (evento.tipo === 'TURNO' && horarioPorDiaTurno) {
+    const diaSemana = new Date(evento.fecha_hora).getDay();
+    horarioTurno = horarioPorDiaTurno.get(`${diaSemana}|${evento.turno_tipo}`);
+  }
+
   return (
     <div className="border border-gray-200 rounded-lg p-3">
       <div className="flex items-start justify-between gap-2">
@@ -450,7 +584,9 @@ function EventoItem({ evento, usuario, puedeEditar, onCambio, onIniciarRun }) {
           <p className="text-sm font-medium text-gray-900 mt-1">{iconoEvento(evento)} {evento.titulo}{evento.puesto ? ` · ${evento.puesto}` : ''}</p>
           <p className="text-xs text-gray-400">
             {evento.sucursal_nombre}
-            {evento.tipo !== 'EVENTO_ESPECIAL' && evento.tipo !== 'SEGUIMIENTO' && ` · ${new Date(evento.fecha_hora).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}`}
+            {horarioTurno
+              ? ` · ${horarioTurno.hora_desde.slice(0, 5)} a ${horarioTurno.hora_hasta.slice(0, 5)}`
+              : evento.tipo !== 'EVENTO_ESPECIAL' && evento.tipo !== 'SEGUIMIENTO' && ` · ${new Date(evento.fecha_hora).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}`}
             {evento.responsable_nombre && ` · ${evento.responsable_nombre}`}
           </p>
           {evento.tarea_descripcion && <p className="text-xs text-gray-500 mt-1">{evento.tarea_descripcion}</p>}
