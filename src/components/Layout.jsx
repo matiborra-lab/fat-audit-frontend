@@ -13,9 +13,9 @@ const linkClassSidebar = ({ isActive }) =>
   (isActive ? 'bg-fat-bordo-50 text-fat-bordo-700' : 'text-gray-600 hover:bg-gray-100');
 
 // Orden general (todos los roles): Calendario primero (pantalla de entrada
-// de la app), Turnos y Auditorías después (uso diario), Historial/Tareas,
-// Dashboard cerca del final (ya no es la pantalla de entrada) y
-// Configuración siempre último.
+// de la app), Tareas justo después, Turnos y Auditorías después (uso
+// diario), Historial, Dashboard cerca del final (ya no es la pantalla de
+// entrada) y Configuración siempre último.
 function itemsDeNav(rol) {
   // Un Colaborador solo ve su calendario, sus tareas y el dashboard de su
   // propia sucursal - nada de historial ni gestión - pero sí sus
@@ -30,8 +30,13 @@ function itemsDeNav(rol) {
     ];
   }
 
-  const items = [{ to: '/calendario', label: 'Calendario' }];
+  const items = [
+    { to: '/calendario', label: 'Calendario' },
+    { to: '/tareas', label: 'Tareas' },
+  ];
 
+  // Turnos: exclusivo de Admin y Gerente (Auditor no gestiona turnos de
+  // sucursal, Colaborador ni ve este bloque - vuelve arriba antes).
   if (rol === 'ADMIN' || rol === 'GERENTE') {
     items.push({ to: '/turnos', label: 'Turnos' });
   }
@@ -42,7 +47,6 @@ function itemsDeNav(rol) {
   items.push({ label: 'Auditorías', children });
 
   items.push({ to: '/historial', label: 'Historial' });
-  items.push({ to: '/tareas', label: 'Tareas' });
   items.push({ to: '/dashboard', label: 'Dashboard' });
 
   // Sucursales/Usuarios/Tareas solo para quien gestiona (Admin/Gerente);
