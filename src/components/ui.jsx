@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import EmojiPicker from 'emoji-picker-react';
 
 export function Campo({ label, ...props }) {
   return (
@@ -238,6 +239,44 @@ export function SelectorEmoji({ opciones = BANCO_EMOJIS, valor, onChange, label 
           </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+// Selector de ícono con el catálogo completo de emojis (buscador + categorías,
+// estilo WhatsApp) - a diferencia de SelectorEmoji (banco fijo chico de ~34
+// emojis), acá se puede elegir cualquiera. Una casilla chica muestra el
+// ícono actual; al tocarla despliega el catálogo en un popover (como se
+// despliega un date-picker), y se cierra solo al elegir o al clickear afuera.
+export function SelectorEmojiCatalogo({ valor, onChange, defecto = '📝' }) {
+  const [abierto, setAbierto] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    function alClickAfuera(e) { if (ref.current && !ref.current.contains(e.target)) setAbierto(false); }
+    document.addEventListener('mousedown', alClickAfuera);
+    return () => document.removeEventListener('mousedown', alClickAfuera);
+  }, []);
+  return (
+    <div ref={ref} className="relative shrink-0">
+      <button
+        type="button"
+        onClick={() => setAbierto((a) => !a)}
+        title="Elegir ícono"
+        className="w-10 h-10 rounded-lg border border-gray-300 text-xl flex items-center justify-center hover:bg-gray-50 bg-white"
+      >
+        {valor || defecto}
+      </button>
+      {abierto && (
+        <div className="absolute z-30 top-full right-0 mt-1 shadow-xl rounded-lg overflow-hidden">
+          <EmojiPicker
+            onEmojiClick={(datos) => { onChange(datos.emoji); setAbierto(false); }}
+            width={300}
+            height={360}
+            skinTonesDisabled
+            previewConfig={{ showPreview: false }}
+          />
+        </div>
+      )}
     </div>
   );
 }

@@ -25,7 +25,7 @@ export default function HistorialDetalle() {
   const [error, setError] = useState('');
   const [seleccionSeguimiento, setSeleccionSeguimiento] = useState(null); // null = no esta eligiendo
   const [programandoSeguimiento, setProgramandoSeguimiento] = useState(false); // 2do paso: sucursal/responsable/fecha
-  const [formProgramar, setFormProgramar] = useState({ responsable: null, fecha: '', hora: '', notificar: true });
+  const [formProgramar, setFormProgramar] = useState({ responsable: null, fecha: '', notificar: true });
   const [guardandoSeguimiento, setGuardandoSeguimiento] = useState(false);
   const [errorSeguimiento, setErrorSeguimiento] = useState('');
   const [toast, setToast] = useState('');
@@ -102,21 +102,23 @@ export default function HistorialDetalle() {
   function cancelarSeguimiento() {
     setSeleccionSeguimiento(null);
     setProgramandoSeguimiento(false);
-    setFormProgramar({ responsable: null, fecha: '', hora: '', notificar: true });
+    setFormProgramar({ responsable: null, fecha: '', notificar: true });
     setErrorSeguimiento('');
   }
 
   async function programarSeguimiento(e) {
     e.preventDefault();
     if (!formProgramar.responsable) { setErrorSeguimiento('Elegí un responsable'); return; }
-    if (!formProgramar.fecha || !formProgramar.hora) { setErrorSeguimiento('Elegí fecha y hora'); return; }
+    if (!formProgramar.fecha) { setErrorSeguimiento('Elegí una fecha'); return; }
     setErrorSeguimiento('');
     setGuardandoSeguimiento(true);
     try {
-      const fecha_hora = new Date(`${formProgramar.fecha}T${formProgramar.hora}:00`).toISOString();
+      // Se pide solo el día, sin hora puntual (el seguimiento se puede hacer
+      // en cualquier momento de esa fecha) - se manda como string local sin
+      // convertir a UTC en el navegador, mismo criterio que Evento especial.
       await api.post(`/api/runs/${id}/seguimiento`, {
         item_ids: [...seleccionSeguimiento], responsable_user_id: formProgramar.responsable.id,
-        fecha_hora, notificar: formProgramar.notificar,
+        fecha_hora: `${formProgramar.fecha}T23:59:00`, notificar: formProgramar.notificar,
       });
       cancelarSeguimiento();
       setToast('Seguimiento programado y notificado al responsable');
@@ -184,10 +186,7 @@ export default function HistorialDetalle() {
               sucursalId={run.sucursal_id} label="Responsable" nombreValue={formProgramar.responsable?.nombre}
               onChange={(_id, u) => setFormProgramar({ ...formProgramar, responsable: u })}
             />
-            <div className="grid grid-cols-2 gap-3">
-              <Campo label="Fecha" type="date" required value={formProgramar.fecha} onChange={(e) => setFormProgramar({ ...formProgramar, fecha: e.target.value })} />
-              <Campo label="Hora" type="time" required value={formProgramar.hora} onChange={(e) => setFormProgramar({ ...formProgramar, hora: e.target.value })} />
-            </div>
+            <Campo label="Fecha" type="date" required value={formProgramar.fecha} onChange={(e) => setFormProgramar({ ...formProgramar, fecha: e.target.value })} />
             <label className="flex items-center gap-2 text-sm text-gray-600">
               <input type="checkbox" checked={formProgramar.notificar} onChange={(e) => setFormProgramar({ ...formProgramar, notificar: e.target.checked })} />
               Notificar al responsable ahora
