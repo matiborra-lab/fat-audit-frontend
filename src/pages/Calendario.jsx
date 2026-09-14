@@ -512,6 +512,9 @@ function EventoItem({ evento, usuario, puedeEditar, horarioPorDiaTurno, onCambio
   const [error, setError] = useState('');
 
   const puedeCompletar = new Date(evento.fecha_hora) <= new Date();
+  // Gerente/Colaborador no pueden adelantar una auditoría antes de su fecha
+  // programada (Admin/Auditor sí, ver POST /api/calendario/:id/iniciar).
+  const puedeIniciarAhora = !(usuario.rol === 'GERENTE' || usuario.rol === 'COLABORADOR') || new Date(evento.fecha_hora) <= new Date();
 
   async function iniciar() {
     setIniciando(true);
@@ -643,8 +646,8 @@ function EventoItem({ evento, usuario, puedeEditar, horarioPorDiaTurno, onCambio
       )}
 
       {evento.estado === 'PENDIENTE' && (evento.tipo === 'AUDITORIA' || evento.tipo === 'SEGUIMIENTO') && (
-        <div className="mt-2">
-          <Boton ancho="w-auto" cargando={iniciando} onClick={iniciar}>Iniciar auditoría</Boton>
+        <div className="mt-2" title={!puedeIniciarAhora ? 'Todavía no llegó la fecha/hora programada' : undefined}>
+          <Boton ancho="w-auto" cargando={iniciando} disabled={!puedeIniciarAhora} onClick={iniciar}>Iniciar auditoría</Boton>
         </div>
       )}
 
