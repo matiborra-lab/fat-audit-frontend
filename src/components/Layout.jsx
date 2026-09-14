@@ -224,7 +224,10 @@ function AvisoNotificaciones() {
   if (!mostrar) return null;
 
   return (
-    <div className="mb-4 flex items-start gap-3 rounded-xl border border-fat-bordo-200 bg-fat-bordo-50/60 px-4 py-3">
+    // Solo celular (md:hidden) - en escritorio activar push no tiene el
+    // mismo peso (no hay tanto riesgo de "perderse" un aviso) y el recordatorio
+    // resultaba más invasivo que útil ahí.
+    <div className="md:hidden mb-4 flex items-start gap-3 rounded-xl border border-fat-bordo-200 bg-fat-bordo-50/60 px-4 py-3">
       <span className="text-xl shrink-0">🔔</span>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-gray-900">Activá las notificaciones</p>
