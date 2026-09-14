@@ -14,9 +14,6 @@ export default function TareasCatalogo() {
   const [sucursales, setSucursales] = useState([]);
   const [nuevoTipo, setNuevoTipo] = useState('');
   const [nuevoIcono, setNuevoIcono] = useState(ICONO_TIPO_DEFAULT);
-  const [nuevaDescripcion, setNuevaDescripcion] = useState('');
-  const [nuevoEnlace, setNuevoEnlace] = useState('');
-  const [nuevoEnlaceNombre, setNuevoEnlaceNombre] = useState('');
   const [tipoEnEdicion, setTipoEnEdicion] = useState(null);
   const [tareaEnEdicion, setTareaEnEdicion] = useState(null); // { tipoTareaId, tarea | null }
   const [toast, setToast] = useState('');
@@ -48,15 +45,9 @@ export default function TareasCatalogo() {
     e.preventDefault();
     if (!nuevoTipo.trim()) return;
     try {
-      await api.post('/api/tipos-tarea', {
-        nombre: nuevoTipo.trim(), icono: nuevoIcono,
-        descripcion: nuevaDescripcion.trim() || null, enlace: nuevoEnlace.trim() || null, enlace_nombre: nuevoEnlaceNombre.trim() || null,
-      });
+      await api.post('/api/tipos-tarea', { nombre: nuevoTipo.trim(), icono: nuevoIcono });
       setNuevoTipo('');
       setNuevoIcono(ICONO_TIPO_DEFAULT);
-      setNuevaDescripcion('');
-      setNuevoEnlace('');
-      setNuevoEnlaceNombre('');
       recargar();
     } catch (err) {
       setError(err.message);
@@ -89,16 +80,9 @@ export default function TareasCatalogo() {
       </Tarjeta>
 
       <Tarjeta className="p-4 space-y-3">
-        <form onSubmit={crearTipo} className="space-y-3">
-          <div className="flex gap-2 items-end">
-            <div className="flex-1"><Campo label="Nuevo tipo de tarea" value={nuevoTipo} onChange={(e) => setNuevoTipo(e.target.value)} placeholder="Ej: Limpieza" /></div>
-            <SelectorEmojiCatalogo valor={nuevoIcono} onChange={setNuevoIcono} />
-          </div>
-          <Campo label="Descripción (opcional)" value={nuevaDescripcion} onChange={(e) => setNuevaDescripcion(e.target.value)} placeholder="Se muestra al completar una tarea de este tipo" />
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Campo label="Enlace (opcional)" type="url" value={nuevoEnlace} onChange={(e) => setNuevoEnlace(e.target.value)} placeholder="https://..." />
-            <Campo label="Nombre del enlace (opcional)" value={nuevoEnlaceNombre} onChange={(e) => setNuevoEnlaceNombre(e.target.value)} placeholder="Ir a página web" />
-          </div>
+        <form onSubmit={crearTipo} className="flex gap-2 items-end">
+          <div className="flex-1"><Campo label="Nuevo tipo de tarea" value={nuevoTipo} onChange={(e) => setNuevoTipo(e.target.value)} placeholder="Ej: Limpieza" /></div>
+          <SelectorEmojiCatalogo valor={nuevoIcono} onChange={setNuevoIcono} />
           <Boton ancho="w-auto" type="submit">Agregar</Boton>
         </form>
       </Tarjeta>
@@ -107,10 +91,9 @@ export default function TareasCatalogo() {
         <Tarjeta key={tipo.id} className="p-4">
           <div className="flex items-center justify-between mb-2">
             <h3 className="font-medium text-gray-900">{tipo.icono || ICONO_TIPO_DEFAULT} {tipo.nombre} {!tipo.activo && <span className="text-xs text-gray-400">(inactivo)</span>}</h3>
-            <div className="flex items-center gap-3 text-xs">
-              <button onClick={() => setTareaEnEdicion({ tipoTareaId: tipo.id, tarea: null })} className="text-fat-bordo-600 hover:underline">+ Tarea</button>
-              <button onClick={() => setTipoEnEdicion(tipo)} className="text-fat-bordo-600 hover:underline">Editar</button>
-              <button onClick={() => alternarTipoActivo(tipo)} className="text-gray-500 hover:underline">{tipo.activo ? 'Desactivar' : 'Activar'}</button>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setTareaEnEdicion({ tipoTareaId: tipo.id, tarea: null })} className="text-xs text-fat-bordo-600 hover:underline shrink-0">+ Tarea</button>
+              <button onClick={() => setTipoEnEdicion(tipo)} title="Editar tipo de tarea" className="text-gray-400 hover:text-fat-bordo-600 shrink-0">✏️</button>
             </div>
           </div>
           <div className="divide-y divide-gray-100">
@@ -149,6 +132,7 @@ export default function TareasCatalogo() {
           tipo={tipoEnEdicion}
           onClose={() => setTipoEnEdicion(null)}
           onGuardado={() => { setTipoEnEdicion(null); setToast('Guardado'); recargar(); }}
+          onEliminar={async () => { await alternarTipoActivo(tipoEnEdicion); setTipoEnEdicion(null); }}
         />
       )}
 
@@ -163,6 +147,9 @@ function ModalTarea({ tipoTareaId, tarea, sucursales, onClose, onGuardado }) {
   const [fotoRequerida, setFotoRequerida] = useState(tarea?.foto_requerida || false);
   const [aplicaTodas, setAplicaTodas] = useState(tarea ? tarea.aplica_todas_sucursales : true);
   const [sucursalIds, setSucursalIds] = useState(new Set(tarea?.sucursal_ids || []));
+  const [descripcion, setDescripcion] = useState(tarea?.descripcion || '');
+  const [enlace, setEnlace] = useState(tarea?.enlace || '');
+  const [enlaceNombre, setEnlaceNombre] = useState(tarea?.enlace_nombre || '');
   const [error, setError] = useState('');
   const [guardando, setGuardando] = useState(false);
 
@@ -174,6 +161,7 @@ function ModalTarea({ tipoTareaId, tarea, sucursales, onClose, onGuardado }) {
     const body = {
       nombre: nombre.trim(), foto_requerida: fotoRequerida,
       aplica_todas_sucursales: aplicaTodas, sucursal_ids: [...sucursalIds],
+      descripcion: descripcion.trim() || null, enlace: enlace.trim() || null, enlace_nombre: enlaceNombre.trim() || null,
     };
     try {
       if (tarea) await api.patch(`/api/tareas-catalogo/${tarea.id}`, body);
@@ -194,6 +182,11 @@ function ModalTarea({ tipoTareaId, tarea, sucursales, onClose, onGuardado }) {
           <input type="checkbox" checked={fotoRequerida} onChange={(e) => setFotoRequerida(e.target.checked)} />
           Requiere foto de evidencia (solo cámara) para completarla
         </label>
+        <Campo label="Descripción (opcional)" value={descripcion} onChange={(e) => setDescripcion(e.target.value)} placeholder="Instrucciones que se muestran al completar esta tarea" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Campo label="Enlace (opcional)" type="url" value={enlace} onChange={(e) => setEnlace(e.target.value)} placeholder="https://..." />
+          <Campo label="Nombre del enlace (opcional)" value={enlaceNombre} onChange={(e) => setEnlaceNombre(e.target.value)} placeholder="Ir a página web" />
+        </div>
         <div>
           <label className="flex items-center gap-2 text-sm text-gray-700 mb-2">
             <input type="checkbox" checked={aplicaTodas} onChange={(e) => setAplicaTodas(e.target.checked)} />
@@ -225,14 +218,12 @@ function ModalTarea({ tipoTareaId, tarea, sucursales, onClose, onGuardado }) {
   );
 }
 
-function ModalTipoTarea({ tipo, onClose, onGuardado }) {
+function ModalTipoTarea({ tipo, onClose, onGuardado, onEliminar }) {
   const [nombre, setNombre] = useState(tipo.nombre);
   const [icono, setIcono] = useState(tipo.icono || ICONO_TIPO_DEFAULT);
-  const [descripcion, setDescripcion] = useState(tipo.descripcion || '');
-  const [enlace, setEnlace] = useState(tipo.enlace || '');
-  const [enlaceNombre, setEnlaceNombre] = useState(tipo.enlace_nombre || '');
   const [error, setError] = useState('');
   const [guardando, setGuardando] = useState(false);
+  const [eliminando, setEliminando] = useState(false);
 
   async function guardar(e) {
     e.preventDefault();
@@ -240,15 +231,23 @@ function ModalTipoTarea({ tipo, onClose, onGuardado }) {
     setError('');
     setGuardando(true);
     try {
-      await api.patch(`/api/tipos-tarea/${tipo.id}`, {
-        nombre: nombre.trim(), icono,
-        descripcion: descripcion.trim() || null, enlace: enlace.trim() || null, enlace_nombre: enlaceNombre.trim() || null,
-      });
+      await api.patch(`/api/tipos-tarea/${tipo.id}`, { nombre: nombre.trim(), icono });
       onGuardado();
     } catch (err) {
       setError(err.message);
     } finally {
       setGuardando(false);
+    }
+  }
+
+  async function alternarActivo() {
+    setEliminando(true);
+    setError('');
+    try {
+      await onEliminar();
+    } catch (err) {
+      setError(err.message);
+      setEliminando(false);
     }
   }
 
@@ -259,14 +258,14 @@ function ModalTipoTarea({ tipo, onClose, onGuardado }) {
           <div className="flex-1"><Campo label="Nombre" required value={nombre} onChange={(e) => setNombre(e.target.value)} autoFocus /></div>
           <SelectorEmojiCatalogo valor={icono} onChange={setIcono} />
         </div>
-        <Campo label="Descripción (opcional)" value={descripcion} onChange={(e) => setDescripcion(e.target.value)} placeholder="Se muestra al completar una tarea de este tipo" />
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <Campo label="Enlace (opcional)" type="url" value={enlace} onChange={(e) => setEnlace(e.target.value)} placeholder="https://..." />
-          <Campo label="Nombre del enlace (opcional)" value={enlaceNombre} onChange={(e) => setEnlaceNombre(e.target.value)} placeholder="Ir a página web" />
-        </div>
         {error && <p className="text-sm text-fat-bordo-600">{error}</p>}
         <Boton type="submit" cargando={guardando}>Guardar</Boton>
       </form>
+      <div className="mt-4 pt-4 border-t border-gray-100">
+        <button type="button" onClick={alternarActivo} disabled={eliminando} className="text-sm text-fat-bordo-600 hover:underline disabled:opacity-50">
+          {tipo.activo ? 'Eliminar tipo de tarea' : 'Reactivar tipo de tarea'}
+        </button>
+      </div>
     </Modal>
   );
 }

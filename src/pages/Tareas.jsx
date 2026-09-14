@@ -201,7 +201,7 @@ function TareaPendiente({ evento, onCambio }) {
             Asignó: {evento.creado_por_nombre || '—'} · Programada: {formatearFechaHora(evento)}
             {evento.responsable_nombre && ` · ${evento.responsable_nombre}`}
           </p>
-          {evento.tipo_tarea_descripcion && <p className="text-xs text-gray-500 mt-1">{evento.tipo_tarea_descripcion}</p>}
+          {evento.tarea_descripcion && <p className="text-xs text-gray-500 mt-1">{evento.tarea_descripcion}</p>}
         </div>
         <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 ${evento.estado_efectivo === 'DEMORADA' ? 'bg-fat-bordo-100 text-fat-bordo-700' : 'bg-yellow-100 text-yellow-700'}`}>
           {evento.estado_efectivo === 'DEMORADA' ? 'Demorada' : 'Pendiente'}
@@ -214,9 +214,9 @@ function TareaPendiente({ evento, onCambio }) {
             <div title={!puedeCompletar ? 'Todavía no llegó la fecha/hora programada' : undefined}>
               <Boton ancho="w-auto" variante="secundario" disabled={!puedeCompletar} onClick={() => setCompletando(true)}>Marcar cumplida</Boton>
             </div>
-            {evento.tipo_tarea_enlace && (
-              <a href={evento.tipo_tarea_enlace} target="_blank" rel="noreferrer" className="inline-block text-sm font-medium rounded-lg py-2 px-4 transition bg-white border border-gray-300 text-gray-700 hover:bg-gray-50">
-                {evento.tipo_tarea_enlace_nombre || 'Ir a página web'}
+            {evento.tarea_enlace && (
+              <a href={evento.tarea_enlace} target="_blank" rel="noreferrer" className="inline-block text-sm font-medium rounded-lg py-2 px-4 transition bg-white border border-gray-300 text-gray-700 hover:bg-gray-50">
+                {evento.tarea_enlace_nombre || 'Ir a página web'}
               </a>
             )}
           </div>
@@ -233,9 +233,9 @@ function TareaPendiente({ evento, onCambio }) {
             <div className="flex flex-wrap gap-2">
               <Boton ancho="w-auto" cargando={guardando} onClick={confirmar}>Confirmar cumplimiento</Boton>
               <Boton ancho="w-auto" variante="secundario" onClick={() => setCompletando(false)}>Cancelar</Boton>
-              {evento.tipo_tarea_enlace && (
-                <a href={evento.tipo_tarea_enlace} target="_blank" rel="noreferrer" className="inline-block text-sm font-medium rounded-lg py-2 px-4 transition bg-white border border-gray-300 text-gray-700 hover:bg-gray-50">
-                  {evento.tipo_tarea_enlace_nombre || 'Ir a página web'}
+              {evento.tarea_enlace && (
+                <a href={evento.tarea_enlace} target="_blank" rel="noreferrer" className="inline-block text-sm font-medium rounded-lg py-2 px-4 transition bg-white border border-gray-300 text-gray-700 hover:bg-gray-50">
+                  {evento.tarea_enlace_nombre || 'Ir a página web'}
                 </a>
               )}
             </div>
