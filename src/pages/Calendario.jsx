@@ -481,7 +481,7 @@ function EventoItem({ evento, usuario, puedeEditar, onCambio, onIniciarRun }) {
                 <Boton ancho="w-auto" variante="secundario" onClick={() => setCompletando(false)}>Cancelar</Boton>
                 {evento.tipo_tarea_enlace && (
                   <a href={evento.tipo_tarea_enlace} target="_blank" rel="noreferrer" className="inline-block text-sm font-medium rounded-lg py-2 px-4 transition bg-white border border-gray-300 text-gray-700 hover:bg-gray-50">
-                    {evento.tipo_tarea_enlace_nombre || 'Ver página'}
+                    {evento.tipo_tarea_enlace_nombre || 'Ir a página web'}
                   </a>
                 )}
               </div>
@@ -493,7 +493,7 @@ function EventoItem({ evento, usuario, puedeEditar, onCambio, onIniciarRun }) {
               </div>
               {evento.tipo_tarea_enlace && (
                 <a href={evento.tipo_tarea_enlace} target="_blank" rel="noreferrer" className="inline-block text-sm font-medium rounded-lg py-2 px-4 transition bg-white border border-gray-300 text-gray-700 hover:bg-gray-50">
-                  {evento.tipo_tarea_enlace_nombre || 'Ver página'}
+                  {evento.tipo_tarea_enlace_nombre || 'Ir a página web'}
                 </a>
               )}
             </div>

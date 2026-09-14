@@ -97,7 +97,7 @@ export default function TareasCatalogo() {
           <Campo label="Descripción (opcional)" value={nuevaDescripcion} onChange={(e) => setNuevaDescripcion(e.target.value)} placeholder="Se muestra al completar una tarea de este tipo" />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Campo label="Enlace (opcional)" type="url" value={nuevoEnlace} onChange={(e) => setNuevoEnlace(e.target.value)} placeholder="https://..." />
-            <Campo label="Nombre del enlace (opcional)" value={nuevoEnlaceNombre} onChange={(e) => setNuevoEnlaceNombre(e.target.value)} placeholder="Ver página" />
+            <Campo label="Nombre del enlace (opcional)" value={nuevoEnlaceNombre} onChange={(e) => setNuevoEnlaceNombre(e.target.value)} placeholder="Ir a página web" />
           </div>
           <Boton ancho="w-auto" type="submit">Agregar</Boton>
         </form>
@@ -262,7 +262,7 @@ function ModalTipoTarea({ tipo, onClose, onGuardado }) {
         <Campo label="Descripción (opcional)" value={descripcion} onChange={(e) => setDescripcion(e.target.value)} placeholder="Se muestra al completar una tarea de este tipo" />
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Campo label="Enlace (opcional)" type="url" value={enlace} onChange={(e) => setEnlace(e.target.value)} placeholder="https://..." />
-          <Campo label="Nombre del enlace (opcional)" value={enlaceNombre} onChange={(e) => setEnlaceNombre(e.target.value)} placeholder="Ver página" />
+          <Campo label="Nombre del enlace (opcional)" value={enlaceNombre} onChange={(e) => setEnlaceNombre(e.target.value)} placeholder="Ir a página web" />
         </div>
         {error && <p className="text-sm text-fat-bordo-600">{error}</p>}
         <Boton type="submit" cargando={guardando}>Guardar</Boton>
