@@ -10,6 +10,7 @@ import Historial from './pages/Historial';
 import HistorialDetalle from './pages/HistorialDetalle';
 import Calendario from './pages/Calendario';
 import GestionarTurnos from './pages/GestionarTurnos';
+import Licencias from './pages/Licencias';
 import Ejecutar from './pages/Ejecutar';
 import Ejecucion from './pages/Ejecucion';
 import Auditorias from './pages/Auditorias';
@@ -59,6 +60,7 @@ export default function App() {
 
               <Route element={<RequireRole roles={['ADMIN', 'GERENTE']} />}>
                 <Route path="/turnos" element={<GestionarTurnos />} />
+                <Route path="/turnos/licencias" element={<Licencias />} />
               </Route>
 
               <Route element={<RequireRole roles={['ADMIN', 'AUDITOR']} />}>

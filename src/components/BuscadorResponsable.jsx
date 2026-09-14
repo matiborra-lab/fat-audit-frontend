@@ -6,7 +6,11 @@ const ROL_LABEL = { ADMIN: 'Admin', AUDITOR: 'Auditor', GERENTE: 'Gerente', COLA
 // Buscador de responsables: lista gente de la sucursal (Gerente +
 // Colaboradores) mas Admin/Auditor - usado en el constructor de eventos del
 // calendario y al ejecutar una auditoría, en vez de un campo de texto libre.
-export default function BuscadorResponsable({ sucursalId, todasLasSucursales = false, value, nombreValue, onChange, label = 'Responsable', required = false }) {
+// advertenciaPorUsuario: Map opcional usuario_id -> texto ("Con licencia
+// otorgada") - si está presente para un candidato, su nombre se muestra en
+// rojo con esa aclaración al lado (no lo bloquea, solo avisa - ver
+// Gestionar turnos).
+export default function BuscadorResponsable({ sucursalId, todasLasSucursales = false, value, nombreValue, onChange, label = 'Responsable', required = false, advertenciaPorUsuario }) {
   const [texto, setTexto] = useState(nombreValue || '');
   const [opciones, setOpciones] = useState([]);
   const [abierto, setAbierto] = useState(false);
@@ -55,19 +59,23 @@ export default function BuscadorResponsable({ sucursalId, todasLasSucursales = f
       />
       {abierto && opciones.length > 0 && (
         <div className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto">
-          {opciones.map((u) => (
-            <button
-              key={u.id}
-              type="button"
-              onClick={() => elegir(u)}
-              className="w-full text-left px-3 py-2 hover:bg-gray-50 text-sm"
-            >
-              <span className="font-medium text-gray-900">{u.nombre || u.email}</span>
-              <span className="text-xs text-gray-400 ml-1.5">
-                {ROL_LABEL[u.rol]}{u.puesto ? ` · ${u.puesto}` : ''}{u.sucursal_nombre ? ` · ${u.sucursal_nombre}` : ''}
-              </span>
-            </button>
-          ))}
+          {opciones.map((u) => {
+            const advertencia = advertenciaPorUsuario?.get(u.id);
+            return (
+              <button
+                key={u.id}
+                type="button"
+                onClick={() => elegir(u)}
+                className="w-full text-left px-3 py-2 hover:bg-gray-50 text-sm"
+              >
+                <span className={`font-medium ${advertencia ? 'text-fat-bordo-600' : 'text-gray-900'}`}>{u.nombre || u.email}</span>
+                <span className="text-xs text-gray-400 ml-1.5">
+                  {ROL_LABEL[u.rol]}{u.puesto ? ` · ${u.puesto}` : ''}{u.sucursal_nombre ? ` · ${u.sucursal_nombre}` : ''}
+                </span>
+                {advertencia && <span className="block text-xs text-fat-bordo-600 font-medium mt-0.5">⚠ {advertencia}</span>}
+              </button>
+            );
+          })}
         </div>
       )}
     </div>

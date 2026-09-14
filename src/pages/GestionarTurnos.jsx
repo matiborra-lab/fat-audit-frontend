@@ -138,6 +138,24 @@ export default function GestionarTurnos() {
   }, [sucursalId]);
   const climaPorDia = useMemo(() => new Map(clima.map((c) => [c.fecha, c])), [clima]);
 
+  // Licencias vigentes en el rango visible - se usan para advertir (no
+  // bloquear) al elegir a alguien con licencia otorgada para un día puntual
+  // (ver advertenciasParaFecha, usado en el modal de "Agregar" de abajo).
+  const [licencias, setLicencias] = useState([]);
+  useEffect(() => {
+    if (!sucursalId) { setLicencias([]); return; }
+    const desde = aClaveDia(diasVisibles[0]);
+    const hasta = aClaveDia(diasVisibles[diasVisibles.length - 1]);
+    api.get(`/api/sucursales/${sucursalId}/licencias?desde=${desde}&hasta=${hasta}`).then(setLicencias).catch(() => setLicencias([]));
+  }, [sucursalId, vista, ancla.getMonth(), ancla.getFullYear(), ancla.getDate()]);
+  function advertenciasParaFecha(fecha) {
+    const mapa = new Map();
+    for (const l of licencias) {
+      if (fecha >= l.fecha_desde && fecha <= l.fecha_hasta) mapa.set(l.usuario_id, 'Con licencia otorgada');
+    }
+    return mapa;
+  }
+
   const [eventosEspeciales, setEventosEspeciales] = useState([]);
   useEffect(() => {
     if (!sucursalId) { setEventosEspeciales([]); return; }
@@ -565,6 +583,7 @@ export default function GestionarTurnos() {
             <BuscadorResponsable
               sucursalId={sucursalId} label="Colaborador" nombreValue={formAlta.responsable?.nombre}
               onChange={(id, u) => setFormAlta({ responsable: u, puesto: u?.puesto || '' })}
+              advertenciaPorUsuario={advertenciasParaFecha(celdaAbierta.fecha)}
             />
             <Select label="Puesto" value={formAlta.puesto} onChange={(e) => setFormAlta({ ...formAlta, puesto: e.target.value })}>
               <option value="">Elegí un puesto</option>

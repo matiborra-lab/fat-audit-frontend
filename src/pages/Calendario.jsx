@@ -19,8 +19,9 @@ const TIPO_COLOR = {
   // Feriados nacionales (ArgentinaDatos) - color e ícono propio, ver TIPO_ICONO.
   FERIADO: 'bg-sky-100 text-sky-800',
   CUMPLEANOS: 'bg-fuchsia-100 text-fuchsia-800',
+  LICENCIA: 'bg-teal-100 text-teal-800',
 };
-const TIPO_ICONO = { AUDITORIA: '📋', AUDITORIA_INTERNA: '📋', SEGUIMIENTO: '📋', FERIADO: '🇦🇷', CUMPLEANOS: '🎁' };
+const TIPO_ICONO = { AUDITORIA: '📋', AUDITORIA_INTERNA: '📋', SEGUIMIENTO: '📋', FERIADO: '🇦🇷', CUMPLEANOS: '🎁', LICENCIA: '🌴' };
 const ICONO_TAREA_DEFAULT = '📝';
 const ICONO_EVENTO_ESPECIAL_DEFAULT = '🎉';
 
@@ -35,6 +36,7 @@ const RESUMEN_TIPO = {
   EVENTO_ESPECIAL: { icono: '⭐', singular: 'evento', plural: 'eventos', color: 'bg-pink-100 text-pink-700' },
   FERIADO: { icono: '🇦🇷', singular: 'feriado', plural: 'feriados', color: 'bg-sky-100 text-sky-800' },
   CUMPLEANOS: { icono: '🎂', singular: 'cumpleaños', plural: 'cumpleaños', color: 'bg-fuchsia-100 text-fuchsia-800' },
+  LICENCIA: { icono: '🌴', singular: 'licencia', plural: 'licencias', color: 'bg-teal-100 text-teal-800' },
 };
 
 // Ícono chico "al costado del nombre" del evento: fijo por tipo (Auditoría/
@@ -47,7 +49,7 @@ function iconoEvento(e) {
   return TIPO_ICONO[e.tipo] || '';
 }
 const FERIADO_TIPO_LABEL = { inamovible: 'Feriado nacional', trasladable: 'Feriado trasladable', puente: 'Puente turístico' };
-const TIPO_LABEL = { AUDITORIA: 'Auditoría de marca', AUDITORIA_INTERNA: 'Auditoría interna', SEGUIMIENTO: 'Seguimiento', TAREA: 'Tarea', TURNO: 'Turno', EVENTO_ESPECIAL: 'Evento especial', FERIADO: 'Feriado', CUMPLEANOS: 'Cumpleaños' };
+const TIPO_LABEL = { AUDITORIA: 'Auditoría de marca', AUDITORIA_INTERNA: 'Auditoría interna', SEGUIMIENTO: 'Seguimiento', TAREA: 'Tarea', TURNO: 'Turno', EVENTO_ESPECIAL: 'Evento especial', FERIADO: 'Feriado', CUMPLEANOS: 'Cumpleaños', LICENCIA: 'Licencia' };
 const TIPOS_FILTRO = [
   { valor: 'AUDITORIA', label: 'Auditoría' },
   { valor: 'SEGUIMIENTO', label: 'Seguimiento' },
@@ -56,7 +58,9 @@ const TIPOS_FILTRO = [
   { valor: 'EVENTO_ESPECIAL', label: 'Evento especial' },
   { valor: 'FERIADO', label: 'Feriado' },
   { valor: 'CUMPLEANOS', label: 'Cumpleaños' },
+  { valor: 'LICENCIA', label: 'Licencia' },
 ];
+const MOTIVO_LICENCIA_LABEL = { VACACIONES: 'Vacaciones', SALUD: 'Salud', FAMILIAR: 'Asuntos familiares', OTRO: 'Otro' };
 const MOTIVOS_PRESET = ['Baja por malestar', 'Problemas personales', 'Evento especial'];
 // Lun..Dom en la UI -> Date#getDay() (0=domingo..6=sábado), igual que el resto de la app (ver GestionarTurnos).
 const DIAS_SEMANA_UI = [
@@ -137,7 +141,7 @@ function SelectorTiposMultiple({ seleccionados, onChange }) {
 // desktop, solo el número en mobile - ver RESUMEN_TIPO). Tocar la tarjeta
 // no abre nada aparte: solo cambia qué día muestra el panel "Detalle del
 // día" de más abajo.
-function DiaCardSemana({ dia, etiqueta, esHoy, seleccionado, eventosDia, feriadosDia, cumpleanosDia, climaDia: climaDiaRaw, onClick }) {
+function DiaCardSemana({ dia, etiqueta, esHoy, seleccionado, eventosDia, feriadosDia, cumpleanosDia, licenciasDia, climaDia: climaDiaRaw, onClick }) {
   const climaDia = climaDiaRaw?.temp_max != null ? climaDiaRaw : null;
   const turnos = eventosDia.filter((e) => e.tipo === 'TURNO');
   const tiposTurno = new Set(turnos.map((t) => t.turno_tipo));
@@ -148,6 +152,7 @@ function DiaCardSemana({ dia, etiqueta, esHoy, seleccionado, eventosDia, feriado
   }
   if (feriadosDia.length) conteos.set('FERIADO', (conteos.get('FERIADO') || 0) + feriadosDia.length);
   if (cumpleanosDia.length) conteos.set('CUMPLEANOS', (conteos.get('CUMPLEANOS') || 0) + cumpleanosDia.length);
+  if (licenciasDia?.length) conteos.set('LICENCIA', (conteos.get('LICENCIA') || 0) + licenciasDia.length);
 
   return (
     <button
@@ -279,6 +284,33 @@ export default function Calendario() {
     return mapa;
   }, [feriadosVisibles]);
 
+  // Licencias: overlay de solo lectura (mismo criterio que feriados/
+  // cumpleaños) - el backend ya scopea a un Colaborador a solo las propias.
+  // Cada licencia cubre un rango de días (fecha_desde..fecha_hasta), se
+  // expande día por día para armar el mapa igual que los otros overlays.
+  const [licencias, setLicencias] = useState([]);
+  useEffect(() => {
+    if (!sucursalIdVista) { setLicencias([]); return; }
+    const desde = aClaveDia(diasVisibles[0]);
+    const hasta = aClaveDia(diasVisibles[diasVisibles.length - 1]);
+    api.get(`/api/sucursales/${sucursalIdVista}/licencias?desde=${desde}&hasta=${hasta}`).then(setLicencias).catch(() => setLicencias([]));
+  }, [sucursalIdVista, vista, ancla.getFullYear(), ancla.getMonth(), ancla.getDate()]);
+  const licenciasVisibles = filtroTipos.length === 0 || filtroTipos.includes('LICENCIA') ? licencias : [];
+  const licenciasPorDia = useMemo(() => {
+    const mapa = new Map();
+    for (const l of licenciasVisibles) {
+      const cursor = new Date(`${l.fecha_desde}T00:00:00`);
+      const fin = new Date(`${l.fecha_hasta}T00:00:00`);
+      while (cursor <= fin) {
+        const clave = aClaveDia(cursor);
+        if (!mapa.has(clave)) mapa.set(clave, []);
+        mapa.get(clave).push(l);
+        cursor.setDate(cursor.getDate() + 1);
+      }
+    }
+    return mapa;
+  }, [licenciasVisibles]);
+
   function recargar() {
     // Selección manual sin ninguna sucursal tildada: cero eventos, sin
     // pedirle nada al backend (no confundir con filtroSucursales === null,
@@ -330,6 +362,7 @@ export default function Calendario() {
   const eventosDelDiaSeleccionado = diaSeleccionado ? eventosPorDia.get(aClaveDia(diaSeleccionado)) || [] : [];
   const feriadosDelDiaSeleccionado = diaSeleccionado ? feriadosPorDia.get(aClaveDia(diaSeleccionado)) || [] : [];
   const cumpleanosDelDiaSeleccionado = diaSeleccionado ? cumpleanosPorDia.get(aClaveDia(diaSeleccionado)) || [] : [];
+  const licenciasDelDiaSeleccionado = diaSeleccionado ? licenciasPorDia.get(aClaveDia(diaSeleccionado)) || [] : [];
 
   return (
     <div className="space-y-4">
@@ -378,6 +411,7 @@ export default function Calendario() {
               eventosDia={eventosPorDia.get(aClaveDia(d)) || []}
               feriadosDia={feriadosPorDia.get(aClaveDia(d)) || []}
               cumpleanosDia={cumpleanosPorDia.get(aClaveDia(d)) || []}
+              licenciasDia={licenciasPorDia.get(aClaveDia(d)) || []}
               climaDia={climaPorDia.get(aClaveDia(d))}
               onClick={() => setDiaSeleccionado(d)}
             />
@@ -393,6 +427,7 @@ export default function Calendario() {
             const esHoy = aClaveDia(d) === aClaveDia(hoy);
             const feriadosDia = feriadosPorDia.get(aClaveDia(d)) || [];
             const cumpleanosDia = cumpleanosPorDia.get(aClaveDia(d)) || [];
+            const licenciasDia = licenciasPorDia.get(aClaveDia(d)) || [];
             const eventosDia = eventosPorDia.get(aClaveDia(d)) || [];
             const climaDiaRaw = climaPorDia.get(aClaveDia(d));
             const climaDia = climaDiaRaw?.temp_max != null ? climaDiaRaw : null;
@@ -423,6 +458,11 @@ export default function Calendario() {
                       {TIPO_ICONO.CUMPLEANOS} {c.nombre || c.email}
                     </p>
                   ))}
+                  {licenciasDia.map((l) => (
+                    <p key={`licencia-${l.id}`} className={`text-[10px] px-1 py-0.5 rounded truncate ${TIPO_COLOR.LICENCIA}`} title={`${MOTIVO_LICENCIA_LABEL[l.motivo]}: ${l.usuario_nombre}`}>
+                      {TIPO_ICONO.LICENCIA} {l.usuario_nombre}
+                    </p>
+                  ))}
                   {eventosDia.slice(0, 2).map((e) => (
                     <p key={e.id} className={`text-[10px] px-1 py-0.5 rounded truncate ${colorEvento(e)}`} title={etiquetaEvento(e)}>{iconoEvento(e)} {e.titulo}</p>
                   ))}
@@ -445,6 +485,7 @@ export default function Calendario() {
           eventos={eventosDelDiaSeleccionado}
           feriados={feriadosDelDiaSeleccionado}
           cumpleanos={cumpleanosDelDiaSeleccionado}
+          licencias={licenciasDelDiaSeleccionado}
           horarioPorDiaTurno={horarioPorDiaTurno}
           usuario={usuario}
           onCambio={() => { recargar(); setToast('Actualizado'); }}
@@ -478,8 +519,8 @@ function puedeGestionarEvento(usuario, evento) {
   return false;
 }
 
-function DiaDetalle({ eventos, feriados, cumpleanos, horarioPorDiaTurno, usuario, onCambio, onIniciarRun }) {
-  if (eventos.length === 0 && feriados.length === 0 && cumpleanos.length === 0) return <p className="text-sm text-gray-400">No hay eventos este día.</p>;
+function DiaDetalle({ eventos, feriados, cumpleanos, licencias, horarioPorDiaTurno, usuario, onCambio, onIniciarRun }) {
+  if (eventos.length === 0 && feriados.length === 0 && cumpleanos.length === 0 && licencias.length === 0) return <p className="text-sm text-gray-400">No hay eventos este día.</p>;
   return (
     <div className="space-y-3">
       {feriados.map((f) => (
@@ -492,6 +533,12 @@ function DiaDetalle({ eventos, feriados, cumpleanos, horarioPorDiaTurno, usuario
         <div key={`cumple-${c.usuario_id}`} className={`rounded-lg p-3 ${TIPO_COLOR.CUMPLEANOS}`}>
           <span className="text-[10px] font-medium uppercase opacity-70">{TIPO_ICONO.CUMPLEANOS} Cumpleaños</span>
           <p className="text-sm font-medium mt-0.5">{c.nombre || c.email}</p>
+        </div>
+      ))}
+      {licencias.map((l) => (
+        <div key={`licencia-${l.id}`} className={`rounded-lg p-3 ${TIPO_COLOR.LICENCIA}`}>
+          <span className="text-[10px] font-medium uppercase opacity-70">{TIPO_ICONO.LICENCIA} {MOTIVO_LICENCIA_LABEL[l.motivo]}</span>
+          <p className="text-sm font-medium mt-0.5">{l.usuario_nombre}{l.detalle ? ` · ${l.detalle}` : ''}</p>
         </div>
       ))}
       {eventos.map((e) => (

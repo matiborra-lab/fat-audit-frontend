@@ -38,7 +38,12 @@ function itemsDeNav(rol) {
   // Turnos: exclusivo de Admin y Gerente (Auditor no gestiona turnos de
   // sucursal, Colaborador ni ve este bloque - vuelve arriba antes).
   if (rol === 'ADMIN' || rol === 'GERENTE') {
-    items.push({ to: '/turnos', label: 'Turnos' });
+    items.push({ label: 'Turnos', children: [
+      // end: true - si no, NavLink marca "Gestionar turnos" activo también
+      // estando en /turnos/licencias (que empieza con el mismo prefijo).
+      { to: '/turnos', label: 'Gestionar turnos', end: true },
+      { to: '/turnos/licencias', label: 'Licencias' },
+    ] });
   }
 
   const children = [{ to: '/ejecutar', label: 'Nueva auditoría' }];
@@ -180,6 +185,64 @@ function ItemNav({ item, gruposAbiertos, alternarGrupo }) {
   );
 }
 
+// Recordatorio para habilitar notificaciones push - solo aparece si el
+// navegador las soporta y todavía no hay una suscripción activa (nunca a
+// quien ya las tiene habilitadas). Cerrarlo lo oculta por el resto de esta
+// pestaña (sessionStorage) - no lo descarta para siempre, así sigue
+// insistiendo en una sesión nueva mientras de verdad no estén activadas.
+function AvisoNotificaciones() {
+  const [mostrar, setMostrar] = useState(false);
+  const [activando, setActivando] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!soportaPush()) return;
+    let cerrado = false;
+    try { cerrado = sessionStorage.getItem('fataudit_aviso_push_cerrado') === '1'; } catch { /* noop */ }
+    if (cerrado) return;
+    suscripcionActual().then((s) => { if (!s) setMostrar(true); }).catch(() => {});
+  }, []);
+
+  async function activar() {
+    setActivando(true);
+    setError('');
+    try {
+      await activarPush();
+      setMostrar(false);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setActivando(false);
+    }
+  }
+
+  function cerrar() {
+    try { sessionStorage.setItem('fataudit_aviso_push_cerrado', '1'); } catch { /* noop */ }
+    setMostrar(false);
+  }
+
+  if (!mostrar) return null;
+
+  return (
+    <div className="mb-4 flex items-start gap-3 rounded-xl border border-fat-bordo-200 bg-fat-bordo-50/60 px-4 py-3">
+      <span className="text-xl shrink-0">🔔</span>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-gray-900">Activá las notificaciones</p>
+        <p className="text-xs text-gray-600 mt-0.5">Recordá habilitarlas para enterarte de tus turnos, tareas y novedades apenas pasen.</p>
+        {error && <p className="text-xs text-fat-bordo-600 mt-1">{error}</p>}
+        <button
+          onClick={activar}
+          disabled={activando}
+          className="mt-2 text-xs font-medium bg-fat-bordo-500 hover:bg-fat-bordo-600 text-white rounded-lg px-3 py-1.5 disabled:opacity-50"
+        >
+          {activando ? 'Un momento…' : 'Habilitar notificaciones'}
+        </button>
+      </div>
+      <button onClick={cerrar} aria-label="Cerrar aviso" className="text-gray-400 hover:text-gray-600 text-lg leading-none shrink-0">&times;</button>
+    </div>
+  );
+}
+
 export default function Layout() {
   const { usuario, logout } = useAuth();
   const location = useLocation();
@@ -270,6 +333,7 @@ export default function Layout() {
         )}
 
         <main className="max-w-[1400px] mx-auto px-4 py-6 md:py-8">
+          <AvisoNotificaciones />
           <Outlet />
         </main>
       </div>
