@@ -1,8 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api/client';
-import { Tarjeta, Campo, Select, Boton, Toast, Leyenda, Cargando } from '../components/ui';
+import { Tarjeta, Select, Boton, Toast, Leyenda, Cargando } from '../components/ui';
 
+const ESTADO_ESTILOS = {
+  BORRADOR: 'bg-gray-100 text-gray-600',
+  PUBLICADA: 'bg-green-100 text-green-700',
+  ARCHIVADA: 'bg-gray-100 text-gray-400',
+};
 const TIPOS_RESPUESTA = ['ESCALA_5', 'ESCALA_10', 'SI_NO', 'CHECKBOX', 'OPCION_MULTIPLE', 'NUMERO', 'TEXTO', 'FECHA'];
 // Unicos tipos que aportan puntaje - TEXTO/FECHA/NUMERO son solo
 // informativos y nunca tienen peso (ver src/scoring en el backend).
@@ -104,6 +109,19 @@ function nuevoItem(sector, area) {
   };
 }
 
+// Una plantilla siempre se puede editar, sin importar su estado (ver
+// comentario en server/plantillas.js) - "Aplicar cambios" se habilita solo
+// cuando el estado en memoria difiere del último guardado (comparación por
+// snapshot serializado, más simple que trackear dirty campo por campo).
+function snapshotDe({ nombre, tipo, aplicaTodas, sucursalesHabilitadas, aprobadoDesde, estructura }) {
+  return JSON.stringify({
+    nombre, tipo, aplicaTodas,
+    sucursales: [...sucursalesHabilitadas].sort((a, b) => a - b),
+    aprobadoDesde,
+    estructura,
+  });
+}
+
 export default function AuditoriaConstructor() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -113,39 +131,63 @@ export default function AuditoriaConstructor() {
   const [aplicaTodas, setAplicaTodas] = useState(true);
   const [sucursalesHabilitadas, setSucursalesHabilitadas] = useState(new Set());
   const [aprobadoDesde, setAprobadoDesde] = useState('');
-  const [nombreEditado, setNombreEditado] = useState('');
+  const [nombre, setNombre] = useState('');
+  const [tipo, setTipo] = useState('INTERNA');
+  const [guardadoRef, setGuardadoRef] = useState(null);
   const [toast, setToast] = useState('');
   const [error, setError] = useState('');
   const [guardando, setGuardando] = useState(false);
+  const [publicando, setPublicando] = useState(false);
+  const [duplicando, setDuplicando] = useState(false);
 
   function recargar() {
     api.get(`/api/plantillas/${id}`).then((data) => {
+      const est = aEstructuraEditable(data);
+      const suc = new Set(data.sucursal_ids);
+      const aprob = data.puntaje_minimo_aprobacion != null ? String(Math.round(data.puntaje_minimo_aprobacion * 1000) / 10) : '';
       setPlantilla(data);
-      setEstructura(aEstructuraEditable(data));
+      setEstructura(est);
       setAplicaTodas(data.aplica_todas_sucursales);
-      setSucursalesHabilitadas(new Set(data.sucursal_ids));
-      setAprobadoDesde(data.puntaje_minimo_aprobacion != null ? String(Math.round(data.puntaje_minimo_aprobacion * 1000) / 10) : '');
-      setNombreEditado(data.nombre);
+      setSucursalesHabilitadas(suc);
+      setAprobadoDesde(aprob);
+      setNombre(data.nombre);
+      setTipo(data.tipo);
+      setGuardadoRef(snapshotDe({ nombre: data.nombre, tipo: data.tipo, aplicaTodas: data.aplica_todas_sucursales, sucursalesHabilitadas: suc, aprobadoDesde: aprob, estructura: est }));
     });
     api.get('/api/sucursales').then(setSucursales);
   }
   useEffect(recargar, [id]);
 
   if (!plantilla || !estructura) return <Cargando />;
-  const editable = plantilla.estado === 'BORRADOR';
   const erroresPeso = erroresDePeso(estructura);
+  const hayCambios = snapshotDe({ nombre, tipo, aplicaTodas, sucursalesHabilitadas, aprobadoDesde, estructura }) !== guardadoRef;
 
   function actualizar(campo, valor) {
     setEstructura((e) => ({ ...e, [campo]: valor }));
   }
 
-  async function guardarEstructura() {
-    if (erroresPeso.length > 0) return;
+  async function aplicarCambios() {
+    if (!nombre.trim()) { setError('Falta el nombre'); return; }
+    if (aprobadoDesde === '') { setError('El umbral mínimo de aprobación es obligatorio'); return; }
+    if (erroresPeso.length > 0) { setError('Revisá los pesos antes de aplicar los cambios'); return; }
     setError('');
     setGuardando(true);
     try {
-      await api.put(`/api/plantillas/${id}/estructura`, estructura);
-      setToast('Estructura guardada');
+      const actualizada = await api.patch(`/api/plantillas/${id}`, {
+        nombre: nombre.trim(), tipo, puntaje_minimo_aprobacion: Number(aprobadoDesde) / 100,
+      });
+      await api.patch(`/api/plantillas/${id}/sucursales`, {
+        aplica_todas_sucursales: aplicaTodas,
+        sucursal_ids: [...sucursalesHabilitadas],
+      });
+      const estructuraGuardada = await api.put(`/api/plantillas/${id}/estructura`, estructura);
+      const estEditable = aEstructuraEditable(estructuraGuardada);
+      setPlantilla(actualizada);
+      setEstructura(estEditable);
+      setNombre(actualizada.nombre);
+      setTipo(actualizada.tipo);
+      setGuardadoRef(snapshotDe({ nombre: actualizada.nombre, tipo: actualizada.tipo, aplicaTodas, sucursalesHabilitadas, aprobadoDesde, estructura: estEditable }));
+      setToast('Cambios aplicados');
     } catch (err) {
       setError(err.message);
     } finally {
@@ -153,28 +195,29 @@ export default function AuditoriaConstructor() {
     }
   }
 
-  async function guardarSucursales() {
+  async function publicar() {
     setError('');
+    setPublicando(true);
     try {
-      await api.patch(`/api/plantillas/${id}/sucursales`, {
-        aplica_todas_sucursales: aplicaTodas,
-        sucursal_ids: [...sucursalesHabilitadas],
-      });
-      setToast('Sucursales actualizadas');
+      const actualizada = await api.post(`/api/plantillas/${id}/publicar`);
+      setPlantilla(actualizada);
+      setToast('Plantilla publicada');
     } catch (err) {
       setError(err.message);
+    } finally {
+      setPublicando(false);
     }
   }
 
-  async function guardarNombre() {
-    if (!nombreEditado.trim()) { setError('El nombre no puede estar vacío'); return; }
+  async function duplicar() {
     setError('');
+    setDuplicando(true);
     try {
-      const actualizada = await api.patch(`/api/plantillas/${id}`, { nombre: nombreEditado.trim() });
-      setPlantilla(actualizada);
-      setToast('Nombre actualizado');
+      const nueva = await api.post(`/api/plantillas/${id}/duplicar`);
+      navigate(`/auditorias/${nueva.id}`);
     } catch (err) {
       setError(err.message);
+      setDuplicando(false);
     }
   }
 
@@ -188,139 +231,106 @@ export default function AuditoriaConstructor() {
     }
   }
 
-  async function guardarAprobacion() {
-    setError('');
-    try {
-      const actualizada = await api.patch(`/api/plantillas/${id}`, {
-        puntaje_minimo_aprobacion: aprobadoDesde === '' ? null : Number(aprobadoDesde) / 100,
-      });
-      setPlantilla(actualizada);
-      setToast('Umbral general actualizado');
-    } catch (err) {
-      setError(err.message);
-    }
-  }
-
-  async function publicar() {
-    if (erroresPeso.length > 0) return;
-    setError('');
-    try {
-      await guardarEstructura();
-      const actualizada = await api.post(`/api/plantillas/${id}/publicar`);
-      setPlantilla(actualizada);
-      setToast('Plantilla publicada');
-    } catch (err) {
-      setError(err.message);
-    }
-  }
-
-  async function crearNuevaVersion() {
-    const nueva = await api.post(`/api/plantillas/${id}/nueva-version`);
-    navigate(`/auditorias/${nueva.id}`);
-  }
-
   return (
     <div className="space-y-6 pb-16">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex-1 min-w-0">
-          {editable ? (
-            <div className="flex items-center gap-2 flex-wrap">
-              <input
-                className="text-xl font-semibold text-gray-900 rounded-lg border border-gray-300 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-fat-bordo-400"
-                value={nombreEditado}
-                onChange={(e) => setNombreEditado(e.target.value)}
-              />
-              <span className="text-gray-400 font-normal">v{plantilla.version}</span>
-              {nombreEditado.trim() && nombreEditado !== plantilla.nombre && (
-                <Boton ancho="w-auto" variante="secundario" onClick={guardarNombre}>Guardar nombre</Boton>
-              )}
-            </div>
-          ) : (
-            <h1 className="text-xl font-semibold text-gray-900">{plantilla.nombre} <span className="text-gray-400 font-normal">v{plantilla.version}</span></h1>
-          )}
-          <p className="text-sm text-gray-500">{plantilla.tipo} · {plantilla.estado}</p>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="flex-1 min-w-[260px] space-y-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <input
+              className="text-xl font-semibold text-gray-900 rounded-lg border border-gray-300 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-fat-bordo-400"
+              value={nombre}
+              onChange={(e) => setNombre(e.target.value)}
+            />
+            <span className="text-gray-400 font-normal">v{plantilla.version}</span>
+            <span className={`text-xs shrink-0 px-2.5 py-0.5 rounded-full font-medium ${ESTADO_ESTILOS[plantilla.estado]}`}>{plantilla.estado}</span>
+          </div>
+          <div className="w-52">
+            <Select value={tipo} onChange={(e) => setTipo(e.target.value)}>
+              <option value="INTERNA">Interna</option>
+              <option value="MARCA">De marca</option>
+              <option value="SEGUIMIENTO">Seguimiento</option>
+            </Select>
+          </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {!editable && <Boton ancho="w-auto" variante="secundario" onClick={crearNuevaVersion}>Crear nueva versión para editar</Boton>}
+        <div className="flex items-center gap-3 shrink-0">
+          <button onClick={duplicar} disabled={duplicando} className="text-xs text-gray-400 hover:text-fat-bordo-600 disabled:opacity-50">{duplicando ? 'Duplicando…' : 'Duplicar'}</button>
           <button onClick={eliminarPlantilla} className="text-xs text-gray-400 hover:text-fat-bordo-600">Eliminar plantilla</button>
         </div>
       </div>
 
-      {!editable && plantilla.estado !== 'ARCHIVADA' && <Leyenda>Esta plantilla está {plantilla.estado.toLowerCase()} y su estructura no se puede editar. Creá una nueva versión para modificar ítems/sectores/áreas sin afectar las auditorías ya hechas — las sucursales habilitadas sí se pueden ajustar acá abajo.</Leyenda>}
-      {!editable && plantilla.estado === 'ARCHIVADA' && <Leyenda>Esta plantilla está archivada y no se puede editar.</Leyenda>}
-
       {error && <p className="text-sm text-fat-bordo-600">{error}</p>}
 
-      {plantilla.estado !== 'ARCHIVADA' && (
-        <Tarjeta className="p-4">
-          <p className="font-medium text-gray-900 mb-3">Sucursales habilitadas</p>
-          <Leyenda>Se puede ajustar en cualquier momento, incluso con la plantilla publicada — no hace falta una nueva versión para sumar o sacar un punto de venta.</Leyenda>
-          <label className="flex items-center gap-2 text-sm text-gray-700 mt-3 mb-2">
-            <input type="checkbox" checked={aplicaTodas} onChange={(e) => setAplicaTodas(e.target.checked)} />
-            Todas las sucursales
-          </label>
-          {!aplicaTodas && (
-            <div className="grid grid-cols-2 gap-2 mt-2">
-              {sucursales.map((s) => (
-                <label key={s.id} className="flex items-center gap-2 text-sm text-gray-600">
-                  <input
-                    type="checkbox"
-                    checked={sucursalesHabilitadas.has(s.id)}
-                    onChange={(e) => {
-                      const nuevo = new Set(sucursalesHabilitadas);
-                      if (e.target.checked) nuevo.add(s.id); else nuevo.delete(s.id);
-                      setSucursalesHabilitadas(nuevo);
-                    }}
-                  />
-                  {s.nombre}
-                </label>
-              ))}
-            </div>
-          )}
-          <Boton ancho="w-auto" variante="secundario" className="mt-3" onClick={guardarSucursales}>Guardar sucursales</Boton>
+      <Tarjeta className="p-4">
+        <p className="font-medium text-gray-900 mb-3">Sucursales habilitadas</p>
+        <label className="flex items-center gap-2 text-sm text-gray-700 mb-2">
+          <input type="checkbox" checked={aplicaTodas} onChange={(e) => setAplicaTodas(e.target.checked)} />
+          Todas las sucursales
+        </label>
+        {!aplicaTodas && (
+          <div className="grid grid-cols-2 gap-2 mt-2">
+            {sucursales.map((s) => (
+              <label key={s.id} className="flex items-center gap-2 text-sm text-gray-600">
+                <input
+                  type="checkbox"
+                  checked={sucursalesHabilitadas.has(s.id)}
+                  onChange={(e) => {
+                    const nuevo = new Set(sucursalesHabilitadas);
+                    if (e.target.checked) nuevo.add(s.id); else nuevo.delete(s.id);
+                    setSucursalesHabilitadas(nuevo);
+                  }}
+                />
+                {s.nombre}
+              </label>
+            ))}
+          </div>
+        )}
+      </Tarjeta>
+
+      <SeccionSectores estructura={estructura} actualizar={actualizar} />
+      <SeccionAreas estructura={estructura} actualizar={actualizar} />
+
+      <Tarjeta className="p-4">
+        <p className="font-medium text-gray-900 mb-1">Aprobación</p>
+        <Leyenda>Si el puntaje total no llega a este %, la auditoría queda desaprobada. Es obligatorio.</Leyenda>
+        <div className="flex items-center gap-2 mt-3">
+          <input
+            className="w-32 rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
+            type="number" required min="0" max="100" step="0.1"
+            value={aprobadoDesde}
+            onChange={(e) => setAprobadoDesde(e.target.value)}
+            placeholder="ej: 75"
+          />
+          <span className="text-sm text-gray-500">% aprobada desde</span>
+        </div>
+
+        <details className="mt-4 border-t border-gray-100 pt-3">
+          <summary className="text-sm font-medium text-gray-700 cursor-pointer">Opciones avanzadas — umbral por sector o área (opcional)</summary>
+          <Leyenda>Además del umbral general de arriba, podés exigir que un sector o área puntual llegue a un % mínimo propio — si no lo cumple, la auditoría queda desaprobada igual, aunque el puntaje total alcance.</Leyenda>
+          <FilasUmbrales estructura={estructura} actualizar={actualizar} />
+        </details>
+      </Tarjeta>
+
+      <SeccionItems estructura={estructura} actualizar={actualizar} />
+
+      {erroresPeso.length > 0 && (
+        <Tarjeta className="p-4 bg-fat-bordo-50/40 border-fat-bordo-200">
+          <p className="text-sm font-medium text-fat-bordo-800 mb-1">No se puede aplicar todavía — los pesos no cierran en 100%:</p>
+          <ul className="text-sm text-fat-bordo-700 list-disc list-inside">
+            {erroresPeso.map((e, i) => <li key={i}>{e}</li>)}
+          </ul>
         </Tarjeta>
       )}
 
-      {editable && (
-        <>
-          <SeccionSectores estructura={estructura} actualizar={actualizar} />
-          <SeccionAreas estructura={estructura} actualizar={actualizar} />
-          <SeccionItems estructura={estructura} actualizar={actualizar} />
-          <SeccionUmbrales estructura={estructura} actualizar={actualizar} />
-
-          <Tarjeta className="p-4">
-            <p className="font-medium text-gray-900 mb-1">Umbral general de aprobación</p>
-            <Leyenda>Si el puntaje total no llega a este %, la auditoría queda desaprobada — es un chequeo aparte de los umbrales por sector/área de arriba. Dejalo vacío para que solo decidan esos umbrales.</Leyenda>
-            <div className="flex items-center gap-2 mt-3">
-              <input
-                className="w-32 rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
-                type="number" min="0" max="100" step="0.1"
-                value={aprobadoDesde}
-                onChange={(e) => setAprobadoDesde(e.target.value)}
-                placeholder="sin mínimo"
-              />
-              <span className="text-sm text-gray-500">% aprobada desde</span>
-              <Boton ancho="w-auto" variante="secundario" onClick={guardarAprobacion}>Guardar</Boton>
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-3 flex justify-center gap-3 z-40">
+        <div className="w-full max-w-[1400px] flex justify-end gap-3">
+          {plantilla.estado === 'BORRADOR' && (
+            <div title={hayCambios ? 'Aplicá los cambios antes de publicar' : undefined}>
+              <Boton ancho="w-auto" variante="secundario" cargando={publicando} disabled={hayCambios || erroresPeso.length > 0} onClick={publicar}>Publicar</Boton>
             </div>
-          </Tarjeta>
-
-          {erroresPeso.length > 0 && (
-            <Tarjeta className="p-4 bg-fat-bordo-50/40 border-fat-bordo-200">
-              <p className="text-sm font-medium text-fat-bordo-800 mb-1">No se puede guardar todavía — los pesos no cierran en 100%:</p>
-              <ul className="text-sm text-fat-bordo-700 list-disc list-inside">
-                {erroresPeso.map((e, i) => <li key={i}>{e}</li>)}
-              </ul>
-            </Tarjeta>
           )}
-
-          <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-3 flex justify-center gap-3 z-40">
-            <div className="w-full max-w-[1400px] flex justify-end gap-3">
-              <Boton ancho="w-auto" variante="secundario" cargando={guardando} disabled={erroresPeso.length > 0} onClick={guardarEstructura}>Guardar borrador</Boton>
-              <Boton ancho="w-auto" disabled={erroresPeso.length > 0} onClick={publicar}>Publicar</Boton>
-            </div>
-          </div>
-        </>
-      )}
+          <Boton ancho="w-auto" cargando={guardando} disabled={!hayCambios || erroresPeso.length > 0} onClick={aplicarCambios}>Aplicar cambios</Boton>
+        </div>
+      </div>
 
       {toast && <Toast mensaje={toast} onCerrar={() => setToast('')} />}
     </div>
@@ -542,17 +552,18 @@ function ReglasEditor({ item, index, set }) {
   );
 }
 
-function SeccionUmbrales({ estructura, actualizar }) {
+// Filas de "condición" del bloque de Aprobación (umbral mínimo por sector o
+// área puntual) - se van agregando de a una, cada una independiente y
+// opcional (a diferencia del umbral general de arriba, que es obligatorio).
+function FilasUmbrales({ estructura, actualizar }) {
   function set(i, campo, valor) {
     const copia = [...estructura.umbrales];
     copia[i] = { ...copia[i], [campo]: valor };
     actualizar('umbrales', copia);
   }
   return (
-    <Tarjeta className="p-4">
-      <p className="font-medium text-gray-900 mb-1">Umbrales críticos</p>
-      <Leyenda>Si un sector o área no alcanza este % mínimo, la auditoría queda DESAPROBADA sin importar el puntaje total.</Leyenda>
-      <div className="space-y-2 mt-3">
+    <div className="mt-3">
+      <div className="space-y-2">
         {estructura.umbrales.map((u, i) => (
           <div key={i} className="flex items-center gap-2">
             <Select value={u.tipo} onChange={(e) => set(i, 'tipo', e.target.value)}>
@@ -568,7 +579,7 @@ function SeccionUmbrales({ estructura, actualizar }) {
           </div>
         ))}
       </div>
-      <button className="text-sm text-fat-bordo-600 hover:underline mt-2" onClick={() => actualizar('umbrales', [...estructura.umbrales, { tipo: 'SECTOR', porcentaje_minimo: 0.8 }])}>+ Agregar umbral</button>
-    </Tarjeta>
+      <button className="text-sm text-fat-bordo-600 hover:underline mt-2" onClick={() => actualizar('umbrales', [...estructura.umbrales, { tipo: 'SECTOR', porcentaje_minimo: 0.8 }])}>+ Agregar condición</button>
+    </div>
   );
 }

@@ -8,6 +8,7 @@ const ESTADO_ESTILOS = {
   PUBLICADA: 'bg-green-100 text-green-700',
   ARCHIVADA: 'bg-gray-100 text-gray-400',
 };
+const TIPO_LABEL = { INTERNA: 'Interna', MARCA: 'De marca', SEGUIMIENTO: 'Seguimiento' };
 
 export default function Auditorias() {
   const navigate = useNavigate();
@@ -16,8 +17,6 @@ export default function Auditorias() {
   const [form, setForm] = useState({ nombre: '', tipo: 'INTERNA', weighting_mode: 'CON_PESO', aprobadoDesde: '' });
   const [error, setError] = useState('');
   const [guardando, setGuardando] = useState(false);
-  const [duplicandoId, setDuplicandoId] = useState(null);
-  const [eliminandoId, setEliminandoId] = useState(null);
 
   function recargar() {
     api.get('/api/plantillas').then(setLista);
@@ -40,31 +39,6 @@ export default function Auditorias() {
     }
   }
 
-  async function duplicar(t) {
-    setError('');
-    setDuplicandoId(t.id);
-    try {
-      const nueva = await api.post(`/api/plantillas/${t.id}/duplicar`);
-      navigate(`/auditorias/${nueva.id}`);
-    } catch (err) {
-      setError(err.message);
-      setDuplicandoId(null);
-    }
-  }
-
-  async function eliminar(t) {
-    setError('');
-    setEliminandoId(t.id);
-    try {
-      await api.del(`/api/plantillas/${t.id}`);
-      setLista((l) => l.filter((x) => x.id !== t.id));
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setEliminandoId(null);
-    }
-  }
-
   if (!lista) return <Cargando />;
 
   return (
@@ -81,25 +55,15 @@ export default function Auditorias() {
           {lista.length === 0 && <p className="p-4 text-sm text-gray-400">Todavía no hay plantillas cargadas.</p>}
           {lista.map((t) => (
             <div key={t.id} className="flex items-center justify-between px-4 py-3 hover:bg-gray-50 gap-3">
-              <Link to={`/auditorias/${t.id}`} className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-gray-900 truncate">{t.nombre} <span className="text-gray-400 font-normal">v{t.version}</span></p>
-                <p className="text-xs text-gray-400">{t.tipo} · {t.cantidad_items} ítems</p>
-              </Link>
+              <p className="text-sm font-medium text-gray-900 truncate flex-1 min-w-0">{t.nombre} <span className="text-gray-400 font-normal">v{t.version}</span></p>
+              <span className="text-xs shrink-0 text-gray-500 w-24">{TIPO_LABEL[t.tipo] || t.tipo}</span>
               <span className={`text-xs shrink-0 px-2.5 py-0.5 rounded-full font-medium ${ESTADO_ESTILOS[t.estado]}`}>{t.estado}</span>
-              <button
-                onClick={() => duplicar(t)}
-                disabled={duplicandoId === t.id}
-                className="text-xs shrink-0 text-fat-bordo-600 hover:underline disabled:opacity-50"
+              <Link
+                to={`/auditorias/${t.id}`}
+                className="text-xs shrink-0 text-fat-bordo-600 hover:underline"
               >
-                {duplicandoId === t.id ? 'Duplicando…' : 'Duplicar'}
-              </button>
-              <button
-                onClick={() => eliminar(t)}
-                disabled={eliminandoId === t.id}
-                className="text-xs shrink-0 text-gray-400 hover:text-fat-bordo-600 disabled:opacity-50"
-              >
-                {eliminandoId === t.id ? 'Eliminando…' : 'Eliminar'}
-              </button>
+                ✏️ Editar
+              </Link>
             </div>
           ))}
         </div>
@@ -127,7 +91,7 @@ export default function Auditorias() {
             />
             <Leyenda>Si el puntaje total no llega a este %, la auditoría queda desaprobada — independiente de los umbrales críticos por sector/área, que se configuran aparte. Dejalo vacío si solo querés que decidan esos umbrales.</Leyenda>
             {error && <p className="text-sm text-fat-bordo-600">{error}</p>}
-            <Boton type="submit" cargando={guardando}>Crear y editar estructura</Boton>
+            <Boton type="submit" cargando={guardando}>Crear</Boton>
           </form>
         </Modal>
       )}
