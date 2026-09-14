@@ -233,7 +233,7 @@ export default function Calendario() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-semibold text-gray-900">Calendario</h1>
-        {puedeCrear && <Boton ancho="w-auto" onClick={() => setModalNuevo(true)}>+ Nuevo evento</Boton>}
+        {puedeCrear && <Boton ancho="w-auto" onClick={() => setModalNuevo(true)}>+ Agendar</Boton>}
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -329,7 +329,7 @@ export default function Calendario() {
           usuario={usuario}
           sucursalEnVista={sucursalIdVista}
           onClose={() => setModalNuevo(false)}
-          onCreado={() => { setModalNuevo(false); recargar(); setToast('Evento creado'); }}
+          onCreado={() => { setModalNuevo(false); recargar(); setToast('Agendado'); }}
         />
       )}
 
@@ -551,6 +551,27 @@ function EventoItem({ evento, usuario, puedeEditar, onCambio, onIniciarRun }) {
   );
 }
 
+// Bloque grande y seleccionable del paso 1 de "+ Agendar" (elegir tipo) -
+// estados default/hover/active vía Tailwind, sin necesidad de guardar un
+// estado "seleccionado" propio porque tocar el bloque ya avanza al form.
+function BloqueTipoAgendar({ icono, titulo, descripcion, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="w-full flex items-center gap-3 rounded-xl border-2 border-gray-200 bg-white px-4 py-3.5 text-left transition-colors
+                 hover:border-fat-bordo-300 hover:bg-fat-bordo-50
+                 active:border-fat-bordo-500 active:bg-fat-bordo-100"
+    >
+      <span className="flex items-center justify-center w-11 h-11 rounded-lg bg-gray-50 text-2xl shrink-0">{icono}</span>
+      <div className="min-w-0">
+        <p className="font-medium text-gray-900">{titulo}</p>
+        <p className="text-xs text-gray-400">{descripcion}</p>
+      </div>
+    </button>
+  );
+}
+
 function ModalNuevoEvento({ sucursales, plantillas, usuario, sucursalEnVista, onClose, onCreado }) {
   const esGerente = usuario.rol === 'GERENTE';
   const esAdmin = usuario.rol === 'ADMIN';
@@ -568,6 +589,14 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, sucursalEnVista, on
   const [tipoTareaAbierto, setTipoTareaAbierto] = useState(''); // qué tipo está desplegado en el 2do select
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState('');
+  // Paso 1: elegir QUÉ se agenda (bloques grandes con ícono) - paso 2: el
+  // formulario de siempre, ya con form.tipo fijo. Se pasa directo al elegir
+  // un bloque, sin confirmar - por eso no hace falta un botón "Continuar" acá.
+  const [mostrarSelector, setMostrarSelector] = useState(true);
+  function elegirTipo(tipo) {
+    setForm((f) => ({ ...f, tipo }));
+    setMostrarSelector(false);
+  }
 
   // Tarea: solo Admin elige sucursal libremente; Gerente ya la tiene fija
   // (la suya) y Auditor la toma fija de la sucursal que esté viendo en el
@@ -666,14 +695,48 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, sucursalEnVista, on
     }
   }
 
+  if (mostrarSelector) {
+    return (
+      <Modal titulo="¿Qué querés agendar?" onClose={onClose} ancho="max-w-md">
+        <p className="text-sm text-gray-500 -mt-1 mb-4">Seleccioná el tipo de actividad que querés programar.</p>
+        <div className="space-y-3">
+          <BloqueTipoAgendar
+            icono={TIPO_ICONO.AUDITORIA}
+            titulo={`Auditoría${esGerente ? ' interna' : ''}`}
+            descripcion="Checklist con plantilla, para una fecha y hora"
+            onClick={() => elegirTipo('AUDITORIA')}
+          />
+          <BloqueTipoAgendar
+            icono={ICONO_TAREA_DEFAULT}
+            titulo="Tarea"
+            descripcion="Rutina puntual o recurrente para un colaborador"
+            onClick={() => elegirTipo('TAREA')}
+          />
+          {esAdmin && (
+            <BloqueTipoAgendar
+              icono={ICONO_EVENTO_ESPECIAL_DEFAULT}
+              titulo="Evento especial"
+              descripcion="Feriado, promoción o aviso para la sucursal"
+              onClick={() => elegirTipo('EVENTO_ESPECIAL')}
+            />
+          )}
+        </div>
+      </Modal>
+    );
+  }
+
+  const TITULO_PASO2 = {
+    AUDITORIA: `Agendar auditoría${esGerente ? ' interna' : ''}`,
+    TAREA: 'Agendar tarea',
+    EVENTO_ESPECIAL: 'Agendar evento especial',
+  };
+
   return (
-    <Modal titulo="Nuevo evento" onClose={onClose} ancho="max-w-lg">
+    <Modal titulo={TITULO_PASO2[form.tipo]} onClose={onClose} ancho="max-w-lg">
       <form onSubmit={crear} className="space-y-3">
-        <Select label="Tipo" value={form.tipo} onChange={(e) => setForm({ ...form, tipo: e.target.value })}>
-          <option value="AUDITORIA">Auditoría{esGerente ? ' interna' : ''}</option>
-          <option value="TAREA">Tarea</option>
-          {esAdmin && <option value="EVENTO_ESPECIAL">Evento especial</option>}
-        </Select>
+        <button type="button" onClick={() => setMostrarSelector(true)} className="text-xs text-gray-400 hover:text-fat-bordo-600 -mt-1">
+          ← Cambiar tipo
+        </button>
 
         {!esGerente && form.tipo !== 'EVENTO_ESPECIAL' && form.tipo !== 'TAREA' && (
           <Select label="Sucursal" required value={form.sucursal_id} onChange={(e) => setForm({ ...form, sucursal_id: e.target.value })}>
@@ -827,7 +890,7 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, sucursalEnVista, on
         )}
 
         {error && <p className="text-sm text-fat-bordo-600">{error}</p>}
-        <Boton type="submit" cargando={guardando}>Crear</Boton>
+        <Boton type="submit" cargando={guardando}>Agendar</Boton>
       </form>
     </Modal>
   );
