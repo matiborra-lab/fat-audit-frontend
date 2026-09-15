@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/client';
-import { Tarjeta, Campo, Boton, Modal, Toast, Cargando, Leyenda, SelectorEmojiCatalogo } from '../components/ui';
+import { Tarjeta, Campo, Boton, Modal, Toast, Cargando, Leyenda, SelectorEmojiCatalogo, SelectorSucursalesMultiple } from '../components/ui';
 
 const ICONO_TIPO_DEFAULT = '📝';
 
@@ -145,8 +145,11 @@ export default function TareasCatalogo() {
 function ModalTarea({ tipoTareaId, tarea, sucursales, onClose, onGuardado }) {
   const [nombre, setNombre] = useState(tarea?.nombre || '');
   const [fotoRequerida, setFotoRequerida] = useState(tarea?.foto_requerida || false);
-  const [aplicaTodas, setAplicaTodas] = useState(tarea ? tarea.aplica_todas_sucursales : true);
-  const [sucursalIds, setSucursalIds] = useState(new Set(tarea?.sucursal_ids || []));
+  // null = todas las sucursales, array = selección manual (mismo criterio que
+  // SelectorSucursalesMultiple, que ya usa el filtro de Calendario).
+  const [sucursalesSeleccionadas, setSucursalesSeleccionadas] = useState(
+    tarea && !tarea.aplica_todas_sucursales ? tarea.sucursal_ids : null
+  );
   const [descripcion, setDescripcion] = useState(tarea?.descripcion || '');
   const [enlace, setEnlace] = useState(tarea?.enlace || '');
   const [enlaceNombre, setEnlaceNombre] = useState(tarea?.enlace_nombre || '');
@@ -158,9 +161,10 @@ function ModalTarea({ tipoTareaId, tarea, sucursales, onClose, onGuardado }) {
     if (!nombre.trim()) return;
     setError('');
     setGuardando(true);
+    const todas = sucursalesSeleccionadas === null;
     const body = {
       nombre: nombre.trim(), foto_requerida: fotoRequerida,
-      aplica_todas_sucursales: aplicaTodas, sucursal_ids: [...sucursalIds],
+      aplica_todas_sucursales: todas, sucursal_ids: todas ? [] : sucursalesSeleccionadas,
       descripcion: descripcion.trim() || null, enlace: enlace.trim() || null, enlace_nombre: enlaceNombre.trim() || null,
     };
     try {
@@ -188,28 +192,8 @@ function ModalTarea({ tipoTareaId, tarea, sucursales, onClose, onGuardado }) {
           <Campo label="Nombre del enlace (opcional)" value={enlaceNombre} onChange={(e) => setEnlaceNombre(e.target.value)} placeholder="Ir a página web" />
         </div>
         <div>
-          <label className="flex items-center gap-2 text-sm text-gray-700 mb-2">
-            <input type="checkbox" checked={aplicaTodas} onChange={(e) => setAplicaTodas(e.target.checked)} />
-            Todas las sucursales
-          </label>
-          {!aplicaTodas && (
-            <div className="grid grid-cols-2 gap-2">
-              {sucursales.map((s) => (
-                <label key={s.id} className="flex items-center gap-2 text-sm text-gray-600">
-                  <input
-                    type="checkbox"
-                    checked={sucursalIds.has(s.id)}
-                    onChange={(e) => {
-                      const nuevo = new Set(sucursalIds);
-                      if (e.target.checked) nuevo.add(s.id); else nuevo.delete(s.id);
-                      setSucursalIds(nuevo);
-                    }}
-                  />
-                  {s.nombre}
-                </label>
-              ))}
-            </div>
-          )}
+          <label className="block text-sm font-medium text-gray-700 mb-1">Sucursales</label>
+          <SelectorSucursalesMultiple sucursales={sucursales} seleccionadas={sucursalesSeleccionadas} onChange={setSucursalesSeleccionadas} />
         </div>
         {error && <p className="text-sm text-fat-bordo-600">{error}</p>}
         <Boton type="submit" cargando={guardando}>Guardar</Boton>
