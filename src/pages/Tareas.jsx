@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
-import { Tarjeta, Boton, Select, Modal, Toast, Cargando, BotonCamara, SelectorSucursalesMultiple } from '../components/ui';
+import { Tarjeta, Boton, Select, Modal, Toast, Cargando, BotonCamara } from '../components/ui';
 
 function aClaveDia(d) {
   return d.toISOString().slice(0, 10);
@@ -38,7 +38,7 @@ export default function Tareas() {
   const { usuario } = useAuth();
   const veTodasSucursales = usuario.rol === 'ADMIN' || usuario.rol === 'AUDITOR';
   const [sucursales, setSucursales] = useState([]);
-  const [filtroSucursales, setFiltroSucursales] = useState(null); // null = todas
+  const [filtroSucursal, setFiltroSucursal] = useState(''); // '' = todas
   const [filtroTipoTarea, setFiltroTipoTarea] = useState('');
   const [eventos, setEventos] = useState(null);
   const [fotoAmpliada, setFotoAmpliada] = useState(null);
@@ -50,15 +50,14 @@ export default function Tareas() {
   }, [veTodasSucursales]);
 
   function recargar() {
-    if (Array.isArray(filtroSucursales) && filtroSucursales.length === 0) { setEventos([]); return; }
     const hoy = new Date();
     const desde = aClaveDia(new Date(hoy.getTime() - VENTANA_DIAS * 86400000));
     const hasta = aClaveDia(new Date(hoy.getTime() + VENTANA_DIAS * 86400000));
     const params = new URLSearchParams({ tipo: 'TAREA', desde, hasta });
-    if (Array.isArray(filtroSucursales)) params.set('sucursal_id', filtroSucursales.join(','));
+    if (filtroSucursal) params.set('sucursal_id', filtroSucursal);
     api.get(`/api/calendario?${params}`).then(setEventos).catch((e) => setError(e.message));
   }
-  useEffect(recargar, [filtroSucursales]);
+  useEffect(recargar, [filtroSucursal]);
 
   // Tipos de tarea presentes en lo ya cargado - evita pedirle el catálogo
   // completo al backend (que además es admin-only) solo para armar el filtro.
@@ -99,7 +98,10 @@ export default function Tareas() {
         <h1 className="text-xl font-semibold text-gray-900">Tareas</h1>
         <div className="flex flex-wrap gap-2">
           {veTodasSucursales && (
-            <SelectorSucursalesMultiple sucursales={sucursales} seleccionadas={filtroSucursales} onChange={setFiltroSucursales} />
+            <Select value={filtroSucursal} onChange={(e) => setFiltroSucursal(e.target.value)}>
+              <option value="">Todas las sucursales</option>
+              {sucursales.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+            </Select>
           )}
           {tiposTareaDisponibles.length > 0 && (
             <Select value={filtroTipoTarea} onChange={(e) => setFiltroTipoTarea(e.target.value)}>

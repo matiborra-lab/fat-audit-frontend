@@ -766,8 +766,8 @@ function EventoItem({ evento, usuario, puedeEditar, onCambio, onIniciarRun }) {
             {evento.tipo !== 'EVENTO_ESPECIAL' && evento.tipo !== 'SEGUIMIENTO' && ` · ${new Date(evento.fecha_hora).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}`}
             {evento.responsable_nombre
               ? ` · ${evento.responsable_nombre}`
-              : (evento.tipo === 'TAREA' && evento.puesto && evento.turno_tipo)
-                ? ` · Colaboradores de ${PUESTO_LABEL[evento.puesto]} (turno ${TURNO_TIPO_LABEL[evento.turno_tipo]})`
+              : (evento.tipo === 'TAREA' && evento.puesto)
+                ? ` · Colaboradores de ${PUESTO_LABEL[evento.puesto]}${evento.turno_tipo ? ` (turno ${TURNO_TIPO_LABEL[evento.turno_tipo]})` : ''}`
                 : ''}
           </p>
           {evento.tarea_descripcion && <p className="text-xs text-gray-500 mt-1">{evento.tarea_descripcion}</p>}
@@ -1052,16 +1052,19 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, sucursalEnVista, on
   const tareasDelTipoAbierto = tiposTarea.find((t) => String(t.id) === String(tipoTareaAbierto))?.tareas || [];
   const esOtro = form.tareaCatalogoId === '__otro';
 
+  // Si hay hora (y no "sin horario"), se resuelve a qué turno corresponde y
+  // el criterio de sector queda atado a ESE turno puntual. Sin hora, el
+  // criterio queda sin turno (turno_tipo null) - aplica a cualquiera que
+  // trabaje ese sector ese día, sin importar el turno (ver GET
+  // /api/calendario en el backend). No es obligatorio poner hora solo para
+  // identificar el turno.
   function payloadResponsablesTarea() {
     const personas = form.responsablesTarea.filter((r) => r.tipo === 'PERSONA');
     const sectores = form.responsablesTarea.filter((r) => r.tipo === 'PUESTO');
     if (!sectores.length) {
       return { responsables: personas.map((p) => ({ tipo: 'PERSONA', user_id: p.id })) };
     }
-    const horaEfectiva = form.sinHora ? null : form.hora;
-    if (!horaEfectiva) throw new Error('Elegí una hora para poder asignar por sector - así se sabe si es turno diurno o nocturno');
-    const turno = turnoParaHora(horariosSucursal, horaEfectiva, form.fecha);
-    if (!turno) throw new Error('Esa sucursal no tiene un turno habilitado que incluya esa hora ese día');
+    const turno = (!form.sinHora && form.hora) ? turnoParaHora(horariosSucursal, form.hora, form.fecha) : null;
     return {
       responsables: [
         ...personas.map((p) => ({ tipo: 'PERSONA', user_id: p.id })),
@@ -1096,7 +1099,6 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, sucursalEnVista, on
         if (esOtro && !form.tituloOtro) throw new Error('Escribí una descripción');
         if (form.tareaRecurrencia === 'SEMANAL' && !form.diasSemana.length) throw new Error('Elegí al menos un día de la semana');
         if (form.tareaRecurrencia === 'MENSUAL' && !form.diasMes.length) throw new Error('Elegí al menos un día del mes');
-        if (!form.fecha) throw new Error('Elegí una fecha de inicio');
         await api.post('/api/calendario/tareas/programar', {
           sucursal_id: Number(sucursalId),
           tarea_catalogo_id: esOtro ? null : Number(form.tareaCatalogoId) || null,
@@ -1107,7 +1109,7 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, sucursalEnVista, on
           dias_semana: form.tareaRecurrencia === 'SEMANAL' ? form.diasSemana : undefined,
           dias_mes: form.tareaRecurrencia === 'MENSUAL' ? form.diasMes : undefined,
           hora: form.sinHora ? null : form.hora,
-          fecha_desde: form.fecha,
+          fecha_desde: form.fecha || aClaveDia(new Date()),
           fecha_hasta: form.fechaHasta || null,
         });
       } else {
@@ -1115,8 +1117,11 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, sucursalEnVista, on
           if (!sucursalId) throw new Error('Elegí una sucursal');
           if (!esOtro && !form.tareaCatalogoId) throw new Error('Elegí una tarea');
           if (esOtro && !form.tituloOtro) throw new Error('Escribí una descripción');
+        } else if (!form.fecha) {
+          throw new Error('Elegí una fecha');
         }
-        if (!form.fecha) throw new Error('Elegí una fecha');
+        // Para TAREA, sin fecha es "desde el momento" (ahora) - no bloquea.
+        const fechaEfectiva = form.fecha || aClaveDia(new Date());
         await api.post('/api/calendario', {
           sucursal_id: Number(sucursalId),
           tipo: form.tipo,
@@ -1125,7 +1130,7 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, sucursalEnVista, on
           titulo: form.tipo === 'TAREA' && esOtro ? form.tituloOtro : null,
           foto_requerida: form.tipo === 'TAREA' && esOtro ? form.fotoRequerida : undefined,
           ...(form.tipo === 'TAREA' ? payloadResponsablesTarea() : { responsable_user_id: form.responsable_user_id || null }),
-          fecha_hora: `${form.fecha}T${form.sinHora && form.tipo === 'TAREA' ? '00:00' : form.hora}:00`,
+          fecha_hora: `${fechaEfectiva}T${form.sinHora && form.tipo === 'TAREA' ? '00:00' : form.hora}:00`,
           hora_definida: form.tipo === 'TAREA' ? !form.sinHora : undefined,
           recurrencia: form.tipo !== 'TAREA' && form.recurrenciaTipo !== 'NINGUNA' ? { tipo: form.recurrenciaTipo, hasta: form.recurrenciaHasta } : null,
         });
@@ -1284,7 +1289,8 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, sucursalEnVista, on
             <SelectorResponsablesTarea sucursalId={sucursalId} seleccionados={form.responsablesTarea} onChange={(v) => setForm({ ...form, responsablesTarea: v })} />
             <p className="text-[11px] text-gray-400 mt-1">
               Opcional. Buscá una o más personas, o elegí "Responsables del sector…" para que la vea quien esté
-              trabajando ese sector cada turno (necesita una hora, para saber si es diurno o nocturno).
+              trabajando ese sector. Si le ponés hora, queda atado a ese turno (diurno/nocturno); sin hora, aplica
+              a cualquiera de ese sector en todo el día.
             </p>
           </div>
         )}
@@ -1298,18 +1304,24 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, sucursalEnVista, on
               <option value="MENSUAL">Mensualmente, ciertos días del mes</option>
             </Select>
 
-            <div className="grid grid-cols-2 gap-3">
-              <Campo label={form.tareaRecurrencia === 'NINGUNA' ? 'Fecha' : 'Desde'} type="date" required value={form.fecha} onChange={(e) => setForm({ ...form, fecha: e.target.value })} />
-              {!form.sinHora && <Campo label="Hora" type="time" required value={form.hora} onChange={(e) => setForm({ ...form, hora: e.target.value })} />}
+            <div className={form.tareaRecurrencia === 'NINGUNA' ? '' : 'grid grid-cols-2 gap-3'}>
+              <Campo
+                label={form.tareaRecurrencia === 'NINGUNA' ? 'Fecha (opcional)' : 'Desde (opcional)'}
+                type="date" value={form.fecha} onChange={(e) => setForm({ ...form, fecha: e.target.value })}
+              />
+              {form.tareaRecurrencia !== 'NINGUNA' && (
+                <Campo label="Hasta (opcional)" type="date" value={form.fechaHasta} onChange={(e) => setForm({ ...form, fechaHasta: e.target.value })} />
+              )}
             </div>
+            <p className="text-[11px] text-gray-400 -mt-2">Si no ponés {form.tareaRecurrencia === 'NINGUNA' ? 'fecha' : 'desde'}, arranca desde el momento.</p>
 
             <label className="flex items-center gap-2 text-sm text-gray-600">
               <input type="checkbox" checked={form.sinHora} onChange={(e) => setForm({ ...form, sinHora: e.target.checked })} />
               Sin horario
             </label>
 
-            {form.tareaRecurrencia !== 'NINGUNA' && (
-              <Campo label="Hasta (opcional)" type="date" value={form.fechaHasta} onChange={(e) => setForm({ ...form, fechaHasta: e.target.value })} />
+            {!form.sinHora && (
+              <Campo label="Hora" type="time" value={form.hora} onChange={(e) => setForm({ ...form, hora: e.target.value })} />
             )}
 
             {form.tareaRecurrencia === 'SEMANAL' && (
