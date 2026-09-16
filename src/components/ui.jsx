@@ -74,11 +74,11 @@ export function Leyenda({ children }) {
   );
 }
 
-export function Toast({ mensaje, onCerrar }) {
+export function Toast({ mensaje, onCerrar, duracion = 4000 }) {
   useEffect(() => {
-    const id = setTimeout(onCerrar, 4000);
+    const id = setTimeout(onCerrar, duracion);
     return () => clearTimeout(id);
-  }, [mensaje, onCerrar]);
+  }, [mensaje, onCerrar, duracion]);
 
   return (
     <div

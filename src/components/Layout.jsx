@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { api } from '../api/client';
 import { soportaPush, suscripcionActual, activarPush, desactivarPush } from '../utils/push';
 import InstalarApp from './InstalarApp';
+import { OnboardingProvider } from './Onboarding';
 
 // Misma apariencia en la barra lateral de escritorio y en el panel de
 // celular - ambas son listas verticales, a diferencia del viejo menú
@@ -28,6 +29,7 @@ function itemsDeNav(rol) {
       { to: '/tareas', label: 'Tareas' },
       { to: '/dashboard', label: 'Dashboard' },
       { label: 'Configuración', children: [{ to: '/configuracion/notificaciones', label: 'Notificaciones' }] },
+      { to: '/ayuda', label: 'Centro de ayuda' },
     ];
   }
 
@@ -66,6 +68,7 @@ function itemsDeNav(rol) {
   }
   hijosConfig.push({ to: '/configuracion/notificaciones', label: 'Notificaciones' });
   items.push({ label: 'Configuración', children: hijosConfig });
+  items.push({ to: '/ayuda', label: 'Centro de ayuda' });
   return items;
 }
 
@@ -272,6 +275,7 @@ export default function Layout() {
   }, [location.pathname]);
 
   return (
+    <OnboardingProvider>
     <div className="min-h-screen bg-fat-marfil-suave md:flex">
       {/* Barra lateral - solo escritorio, reemplaza el viejo menú horizontal
           del header. Muestra únicamente los módulos permitidos para el rol
@@ -342,5 +346,6 @@ export default function Layout() {
         </main>
       </div>
     </div>
+    </OnboardingProvider>
   );
 }

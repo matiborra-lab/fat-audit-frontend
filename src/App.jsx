@@ -18,6 +18,7 @@ import AuditoriaConstructor from './pages/AuditoriaConstructor';
 import Configuracion from './pages/Configuracion';
 import Tareas from './pages/Tareas';
 import ReportesProgramados from './pages/ReportesProgramados';
+import CentroAyuda from './pages/CentroAyuda';
 
 export default function App() {
   return (
@@ -50,6 +51,9 @@ export default function App() {
                   es la única que ven Auditor/Colaborador. */}
               <Route path="/configuracion" element={<Configuracion />} />
               <Route path="/configuracion/:tab" element={<Configuracion />} />
+              {/* Sin gate de rol: el Centro de ayuda filtra sus propias
+                  categorías/artículos según el rol (ver ayudaContenido.js). */}
+              <Route path="/ayuda" element={<CentroAyuda />} />
 
               <Route element={<RequireRole roles={['ADMIN', 'AUDITOR', 'GERENTE']} />}>
                 <Route path="/historial" element={<Historial />} />

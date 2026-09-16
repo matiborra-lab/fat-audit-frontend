@@ -47,8 +47,15 @@ export function AuthProvider({ children }) {
     borrarToken();
   }, []);
 
+  // Actualiza campos puntuales del usuario en memoria sin ir a buscarlo de
+  // nuevo al backend - lo usa Onboarding.jsx para reflejar al instante que
+  // ya vio/omitió el tutorial, sin esperar el próximo /api/auth/yo.
+  const actualizarUsuario = useCallback((cambios) => {
+    setUsuario((u) => (u ? { ...u, ...cambios } : u));
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ usuario, cargando, login, logout, aplicarToken }}>
+    <AuthContext.Provider value={{ usuario, cargando, login, logout, aplicarToken, actualizarUsuario }}>
       {children}
     </AuthContext.Provider>
   );
