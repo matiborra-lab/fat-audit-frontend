@@ -19,11 +19,23 @@ async function pedido(metodo, ruta, body, { auth = true } = {}) {
     if (token) headers.Authorization = 'Bearer ' + token;
   }
 
-  const resp = await fetch(API_URL + ruta, {
-    method: metodo,
-    headers,
-    body: body != null ? JSON.stringify(body) : undefined,
-  });
+  let resp;
+  try {
+    resp = await fetch(API_URL + ruta, {
+      method: metodo,
+      headers,
+      body: body != null ? JSON.stringify(body) : undefined,
+    });
+  } catch (err) {
+    // fetch tira un TypeError ("Failed to fetch") sin más detalle cuando la
+    // request ni siquiera llega a completarse (sin conexión, CORS, servidor
+    // caído) - se lo reemplaza acá por un mensaje que el usuario entienda,
+    // en vez de dejar pasar el texto crudo del navegador.
+    const error = new Error('No se pudo conectar con el servidor. Revisá tu conexión e intentá de nuevo.');
+    error.status = 0;
+    error.original = err;
+    throw error;
+  }
 
   const data = await resp.json().catch(() => null);
   if (!resp.ok) {

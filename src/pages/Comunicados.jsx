@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api/client';
-import { Tarjeta, Select, Boton, Toast, Leyenda, Cargando } from '../components/ui';
+import { Tarjeta, Select, Boton, Modal, Toast, Leyenda, Cargando } from '../components/ui';
 
 const ROL_LABEL = { ADMIN: 'Admin', AUDITOR: 'Auditor', GERENTE: 'Gerente', COLABORADOR: 'Colaborador' };
 const PUESTOS = ['COCINA', 'CAJA', 'REFUERZO_COCINA'];
@@ -52,6 +52,33 @@ function etiquetaMiembro(m) {
   return `${ROL_LABEL[m.rol] || m.rol}${m.puesto ? ` · ${PUESTO_LABEL[m.puesto]}` : ''}${m.sucursal_nombre ? ` · ${m.sucursal_nombre}` : ''}`;
 }
 
+function formatearFechaHora(valor) {
+  return new Date(valor).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+// Reconstruye la etiqueta legible de un criterio de audiencia guardado
+// (audiencia_json no guarda el label, solo lo que necesita el backend) -
+// se usa al Duplicar un comunicado para poder mostrar los chips de nuevo.
+// `miembros` es lo último que se cargó en el selector de integrantes -
+// alcanza para resolver el nombre de una PERSONA si esa persona pertenece
+// a la sucursal filtrada en ese momento; si no se encuentra, cae a un
+// texto genérico en vez de trabar la duplicación.
+function etiquetaCriterio(c, sucursales, miembros) {
+  const nombreSuc = (id) => sucursales.find((s) => String(s.id) === String(id))?.nombre || 'esa sucursal';
+  switch (c.tipo) {
+    case 'PERSONA': {
+      const m = miembros.find((m) => m.id === Number(c.user_id));
+      return m ? `${m.nombre || m.email} · ${etiquetaMiembro(m)}` : `Persona #${c.user_id}`;
+    }
+    case 'TODOS': return 'Todos los integrantes (todas las sucursales)';
+    case 'GERENTES': return 'Gerentes (todas las sucursales)';
+    case 'TODOS_SUCURSAL': return `Todos los integrantes de ${nombreSuc(c.sucursal_id)}`;
+    case 'GERENTES_SUCURSAL': return `Gerentes de ${nombreSuc(c.sucursal_id)}`;
+    case 'PUESTO': return `Responsables de ${PUESTO_LABEL[c.puesto]} (${nombreSuc(c.sucursal_id)}) - turno del día`;
+    default: return 'Destinatario';
+  }
+}
+
 export default function Comunicados() {
   const [sucursales, setSucursales] = useState([]);
   const [filtroSucursal, setFiltroSucursal] = useState(''); // '' = todas
@@ -65,6 +92,10 @@ export default function Comunicados() {
   const [titulo, setTitulo] = useState('');
   const [descripcion, setDescripcion] = useState('');
   const [archivo, setArchivo] = useState(null);
+  // URL de una imagen YA subida (viene de Duplicar un comunicado anterior) -
+  // separada de `archivo` (un File nuevo todavía sin subir) para no
+  // resubir la misma foto de nuevo si el usuario no la cambia.
+  const [imagenUrlPrevia, setImagenUrlPrevia] = useState(null);
   const [enlace, setEnlace] = useState('');
   const [enlaceNombre, setEnlaceNombre] = useState('');
   const [fecha, setFecha] = useState('');
@@ -74,9 +105,15 @@ export default function Comunicados() {
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState('');
   const [toast, setToast] = useState('');
+  const [verComunicado, setVerComunicado] = useState(null); // detalle + destinatarios, o null
+  const [cargandoVer, setCargandoVer] = useState(false);
+  const [errorVer, setErrorVer] = useState('');
+  const [confirmandoEliminar, setConfirmandoEliminar] = useState(null); // comunicado a confirmar, o null
 
   const tituloRef = useRef(null);
   const descripcionRef = useRef(null);
+  const archivoInputRef = useRef(null);
+  const formRef = useRef(null);
   const cursorPendienteRef = useRef(null);
   function avisarCursorPendiente(pendiente) { cursorPendienteRef.current = pendiente; }
   // Corre DESPUÉS de que título/descripción ya se renderizaron con el nuevo
@@ -158,11 +195,29 @@ export default function Comunicados() {
   const estaTodos = tieneCriterio(filtroSucursal ? (c) => c.tipo === 'TODOS_SUCURSAL' && String(c.sucursal_id) === String(filtroSucursal) : (c) => c.tipo === 'TODOS');
   const estaGerentes = tieneCriterio(filtroSucursal ? (c) => c.tipo === 'GERENTES_SUCURSAL' && String(c.sucursal_id) === String(filtroSucursal) : (c) => c.tipo === 'GERENTES');
 
+  function quitarFoto() {
+    setArchivo(null);
+    setImagenUrlPrevia(null);
+    if (archivoInputRef.current) archivoInputRef.current.value = '';
+  }
+
   async function subirImagenSiHaceFalta() {
-    if (!archivo) return null;
+    if (!archivo) return imagenUrlPrevia || null;
     const { uploadUrl, publicUrl } = await api.post('/api/comunicados/imagen/url-subida', { content_type: archivo.type });
-    await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': archivo.type }, body: archivo });
+    let resp;
+    try {
+      resp = await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': archivo.type }, body: archivo });
+    } catch (err) {
+      throw new Error('No se pudo subir la foto (revisá tu conexión) - probá de nuevo o sacala y mandalo sin foto.');
+    }
+    if (!resp.ok) throw new Error('No se pudo subir la foto (el servidor de archivos devolvió un error) - probá de nuevo.');
     return publicUrl;
+  }
+
+  function limpiarFormulario() {
+    setTitulo(''); setDescripcion(''); setEnlace(''); setEnlaceNombre('');
+    setFecha(''); setHora(''); setAudiencia([]);
+    quitarFoto();
   }
 
   async function enviar(e) {
@@ -184,8 +239,7 @@ export default function Comunicados() {
         hora_envio: hora || null,
       });
       setToast(creado.enviado_en ? `Enviado a ${creado.cantidad_enviados} persona(s)` : 'Comunicado programado');
-      setTitulo(''); setDescripcion(''); setArchivo(null); setEnlace(''); setEnlaceNombre('');
-      setFecha(''); setHora(''); setAudiencia([]);
+      limpiarFormulario();
       recargarComunicados();
     } catch (err) {
       setError(err.message);
@@ -194,16 +248,51 @@ export default function Comunicados() {
     }
   }
 
-  async function eliminarComunicado(id) {
+  async function confirmarEliminar() {
+    if (!confirmandoEliminar) return;
     try {
-      await api.del(`/api/comunicados/${id}`);
+      await api.del(`/api/comunicados/${confirmandoEliminar.id}`);
+      setConfirmandoEliminar(null);
+      if (verComunicado?.id === confirmandoEliminar.id) setVerComunicado(null);
       recargarComunicados();
     } catch (err) {
       setError(err.message);
     }
   }
 
-  const esSoloPush = !descripcion.trim() && !archivo && !enlace.trim();
+  async function abrirVer(c) {
+    setErrorVer('');
+    setCargandoVer(true);
+    setVerComunicado({ id: c.id }); // abre el modal ya, con el detalle cargando adentro
+    try {
+      const detalle = await api.get(`/api/comunicados/${c.id}`);
+      setVerComunicado(detalle);
+    } catch (err) {
+      setErrorVer(err.message);
+    } finally {
+      setCargandoVer(false);
+    }
+  }
+
+  // Precarga el formulario de arriba con el contenido de un comunicado ya
+  // mandado (mismos destinatarios, mismo texto) para poder mandarlo de
+  // nuevo tal cual (mismos destinatarios) o retocarlo antes de reenviar.
+  function duplicar(c) {
+    setTitulo(c.titulo || '');
+    setDescripcion(c.descripcion || '');
+    setEnlace(c.enlace || '');
+    setEnlaceNombre(c.enlace_nombre || '');
+    setArchivo(null);
+    setImagenUrlPrevia(c.imagen_url || null);
+    setFecha(''); setHora('');
+    const criterios = c.audiencia_json || [];
+    setAudiencia(criterios.map((criterio) => ({ criterio, label: etiquetaCriterio(criterio, sucursales, miembros) })));
+    setVerComunicado(null);
+    setToast('Comunicado copiado abajo - revisalo y mandalo cuando quieras');
+    formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  const esSoloPush = !descripcion.trim() && !archivo && !imagenUrlPrevia && !enlace.trim();
 
   return (
     <div className="space-y-6">
@@ -214,7 +303,7 @@ export default function Comunicados() {
       </Leyenda>
 
       <Tarjeta className="p-4 space-y-4">
-        <form onSubmit={enviar} className="space-y-4">
+        <form ref={formRef} onSubmit={enviar} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Título / encabezado push</label>
             <input
@@ -249,11 +338,24 @@ export default function Comunicados() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Foto (opcional)</label>
-              <input
-                type="file" accept="image/*"
-                className="w-full text-sm"
-                onChange={(e) => setArchivo(e.target.files?.[0] || null)}
-              />
+              {(archivo || imagenUrlPrevia) ? (
+                <div className="flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2">
+                  <img
+                    src={archivo ? URL.createObjectURL(archivo) : imagenUrlPrevia}
+                    alt=""
+                    className="w-9 h-9 rounded object-cover shrink-0"
+                  />
+                  <p className="text-sm text-gray-600 truncate flex-1">{archivo ? archivo.name : 'Foto del comunicado original'}</p>
+                  <button type="button" onClick={quitarFoto} className="text-xs text-gray-400 hover:text-fat-bordo-600 shrink-0">Quitar</button>
+                </div>
+              ) : (
+                <input
+                  ref={archivoInputRef}
+                  type="file" accept="image/*"
+                  className="w-full text-sm"
+                  onChange={(e) => setArchivo(e.target.files?.[0] || null)}
+                />
+              )}
             </div>
             <div className="grid grid-cols-2 gap-2">
               <input className="rounded-lg border border-gray-300 px-3 py-2 text-sm" placeholder="Enlace (opcional)" type="url" value={enlace} onChange={(e) => setEnlace(e.target.value)} />
@@ -343,24 +445,89 @@ export default function Comunicados() {
             <div className="divide-y divide-gray-100">
               {comunicados.map((c) => (
                 <div key={c.id} className="px-4 py-3 flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">{c.titulo}</p>
+                  <button className="min-w-0 text-left" onClick={() => abrirVer(c)}>
+                    <p className="text-sm font-medium text-gray-900 truncate hover:text-fat-bordo-600">{c.titulo}</p>
                     <p className="text-xs text-gray-400">
                       {c.enviado_en
-                        ? `Enviado ${new Date(c.enviado_en).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })} · ${c.cantidad_enviados ?? 0} persona(s)`
-                        : `Programado para ${new Date(c.fecha_envio).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`}
+                        ? `Enviado ${formatearFechaHora(c.enviado_en)} · ${c.cantidad_enviados ?? 0} persona(s)`
+                        : `Programado para ${formatearFechaHora(c.fecha_envio)}`}
                       {c.creado_por_nombre && ` · por ${c.creado_por_nombre}`}
                     </p>
+                  </button>
+                  <div className="flex items-center gap-2 shrink-0 text-xs">
+                    <button onClick={() => abrirVer(c)} className="text-gray-400 hover:text-fat-bordo-600">Ver</button>
+                    <button onClick={() => duplicar(c)} className="text-gray-400 hover:text-fat-bordo-600">Duplicar</button>
+                    <button onClick={() => setConfirmandoEliminar(c)} className="text-gray-400 hover:text-fat-bordo-600">Eliminar</button>
                   </div>
-                  {!c.enviado_en && (
-                    <button onClick={() => eliminarComunicado(c.id)} className="text-xs text-gray-400 hover:text-fat-bordo-600 shrink-0">Eliminar</button>
-                  )}
                 </div>
               ))}
             </div>
           </Tarjeta>
         )}
       </div>
+
+      {verComunicado && (
+        <Modal titulo="Comunicado" onClose={() => setVerComunicado(null)} ancho="max-w-lg">
+          {cargandoVer && <Cargando />}
+          {errorVer && <p className="text-sm text-fat-bordo-600">{errorVer}</p>}
+          {!cargandoVer && !errorVer && verComunicado.titulo && (
+            <div className="space-y-4">
+              {verComunicado.imagen_url && (
+                <img src={verComunicado.imagen_url} alt="" className="w-full max-h-48 object-cover rounded-lg" />
+              )}
+              <div>
+                <p className="font-medium text-gray-900">{verComunicado.titulo}</p>
+                {verComunicado.descripcion && <p className="text-sm text-gray-600 whitespace-pre-wrap mt-1">{verComunicado.descripcion}</p>}
+                {verComunicado.enlace && (
+                  <p className="text-xs text-fat-bordo-600 mt-1">🔗 {verComunicado.enlace_nombre || 'Ver más'}: {verComunicado.enlace}</p>
+                )}
+                <p className="text-xs text-gray-400 mt-2">
+                  {verComunicado.enviado_en
+                    ? `Enviado ${formatearFechaHora(verComunicado.enviado_en)}`
+                    : `Programado para ${formatearFechaHora(verComunicado.fecha_envio)}`}
+                  {verComunicado.creado_por_nombre && ` · por ${verComunicado.creado_por_nombre}`}
+                </p>
+              </div>
+
+              <div className="border-t border-gray-100 pt-3">
+                <p className="text-sm font-medium text-gray-700 mb-2">
+                  Destinatarios ({verComunicado.destinatarios.length}) · {verComunicado.destinatarios.filter((d) => d.leida_en).length} lo abrieron
+                </p>
+                <div className="border border-gray-200 rounded-lg max-h-56 overflow-y-auto divide-y divide-gray-100">
+                  {verComunicado.destinatarios.length === 0 && <p className="text-sm text-gray-400 p-3">Todavía no le llegó a nadie.</p>}
+                  {verComunicado.destinatarios.map((d) => (
+                    <div key={d.usuario_id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
+                      <span className="text-gray-800 truncate">{d.nombre || d.email}</span>
+                      <span className={`text-xs shrink-0 ${d.leida_en ? 'text-green-600' : 'text-gray-400'}`}>
+                        {d.leida_en ? `✓ Abierto ${formatearFechaHora(d.leida_en)}` : 'No abierto'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <Boton ancho="w-auto" variante="secundario" onClick={() => duplicar(verComunicado)}>Duplicar y reenviar</Boton>
+                <Boton ancho="w-auto" variante="peligro" onClick={() => setConfirmandoEliminar(verComunicado)}>Eliminar</Boton>
+              </div>
+            </div>
+          )}
+        </Modal>
+      )}
+
+      {confirmandoEliminar && (
+        <Modal titulo="Eliminar comunicado" onClose={() => setConfirmandoEliminar(null)} ancho="max-w-sm">
+          <div className="space-y-3">
+            <p className="text-sm text-gray-600">
+              ¿Eliminar <strong>{confirmandoEliminar.titulo}</strong> del historial? Si ya se envió, esto no le retira la notificación a quien ya se la mandó, solo lo saca de esta lista.
+            </p>
+            <div className="flex gap-2">
+              <Boton ancho="w-auto" variante="peligro" onClick={confirmarEliminar}>Sí, eliminar</Boton>
+              <Boton ancho="w-auto" variante="secundario" onClick={() => setConfirmandoEliminar(null)}>Cancelar</Boton>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {toast && <Toast mensaje={toast} onCerrar={() => setToast('')} />}
     </div>
