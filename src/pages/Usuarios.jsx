@@ -13,6 +13,10 @@ function formatearFecha(valor) {
   return new Date(valor).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
+function nombreCompleto(u) {
+  return [u.nombre, u.apellido].filter(Boolean).join(' ') || u.email;
+}
+
 export default function Usuarios() {
   const { usuario: yo } = useAuth();
   const esGerente = yo.rol === 'GERENTE';
@@ -23,7 +27,7 @@ export default function Usuarios() {
   const [modalAbierto, setModalAbierto] = useState(false);
   const [editando, setEditando] = useState(null);
   const [toast, setToast] = useState('');
-  const [form, setForm] = useState({ email: '', usuario: '', nombre: '', rol: esGerente ? 'COLABORADOR' : 'AUDITOR', sucursal_id: '', puesto: '', fecha_nacimiento: '' });
+  const [form, setForm] = useState({ email: '', usuario: '', nombre: '', apellido: '', rol: esGerente ? 'COLABORADOR' : 'AUDITOR', sucursal_id: '', puesto: '', fecha_nacimiento: '' });
   const [formEdit, setFormEdit] = useState(null);
   const [error, setError] = useState('');
   const [guardando, setGuardando] = useState(false);
@@ -55,7 +59,7 @@ export default function Usuarios() {
       if (body.rol !== 'COLABORADOR') delete body.puesto;
       const creado = await api.post('/api/admin/usuarios', body);
       setModalAbierto(false);
-      setForm({ email: '', usuario: '', nombre: '', rol: esGerente ? 'COLABORADOR' : 'AUDITOR', sucursal_id: '', puesto: '', fecha_nacimiento: '' });
+      setForm({ email: '', usuario: '', nombre: '', apellido: '', rol: esGerente ? 'COLABORADOR' : 'AUDITOR', sucursal_id: '', puesto: '', fecha_nacimiento: '' });
       // El backend crea el usuario igual aunque el mail de invitación falle
       // (ver advertencia) - antes acá se mostraba siempre "invitado por
       // mail" sin chequear eso, ocultando el fallo de envío.
@@ -73,7 +77,12 @@ export default function Usuarios() {
     setError('');
     setGuardando(true);
     try {
-      const body = { nombre: formEdit.nombre, usuario: formEdit.usuario || null, email: formEdit.email };
+      // apellido va como string (incluso vacío) y no como null - el backend
+      // lo aplica con COALESCE, que solo "no toca" la columna si el valor es
+      // NULL. Mandar null borraría la posibilidad de vaciar el apellido una
+      // vez cargado (a diferencia de nombre, que es obligatorio y siempre
+      // tiene contenido).
+      const body = { nombre: formEdit.nombre, apellido: formEdit.apellido ?? '', usuario: formEdit.usuario || null, email: formEdit.email };
       if (esGerente) {
         if (editando.rol === 'COLABORADOR') { body.puesto = formEdit.puesto; body.fecha_nacimiento = formEdit.fecha_nacimiento || null; }
       } else {
@@ -115,7 +124,7 @@ export default function Usuarios() {
   function abrirEdicion(u) {
     setError('');
     setConfirmandoReset(false);
-    setFormEdit({ email: u.email || '', nombre: u.nombre || '', usuario: u.usuario || '', puesto: u.puesto || '', rol: u.rol, sucursal_id: u.sucursal_id || '', fecha_nacimiento: u.fecha_nacimiento || '' });
+    setFormEdit({ email: u.email || '', nombre: u.nombre || '', apellido: u.apellido || '', usuario: u.usuario || '', puesto: u.puesto || '', rol: u.rol, sucursal_id: u.sucursal_id || '', fecha_nacimiento: u.fecha_nacimiento || '' });
     setEditando(u);
   }
 
@@ -153,7 +162,7 @@ export default function Usuarios() {
           {activos.map((u) => (
             <div key={u.id} className="px-4 py-3 flex items-center justify-between gap-3">
               <button className="min-w-0 text-left" onClick={() => abrirEdicion(u)}>
-                <p className="text-sm font-medium text-gray-900 truncate">{u.nombre || u.email}</p>
+                <p className="text-sm font-medium text-gray-900 truncate">{nombreCompleto(u)}</p>
                 <p className="text-xs text-gray-400 truncate">
                   {u.usuario ? `@${u.usuario} · ` : ''}{u.email} · {ROL_LABEL[u.rol]}{u.puesto ? ` · ${PUESTO_LABEL[u.puesto]}` : ''}{u.sucursal_nombre ? ` · ${u.sucursal_nombre}` : ''}
                   {!u.clave_definida && ' · invitación pendiente'}
@@ -187,7 +196,7 @@ export default function Usuarios() {
               {eliminados.map((u) => (
                 <div key={u.id} className="px-4 py-3 flex items-center justify-between gap-3 opacity-70">
                   <button className="min-w-0 text-left" onClick={() => abrirEdicion(u)}>
-                    <p className="text-sm font-medium text-gray-700 truncate">{u.nombre || u.email}</p>
+                    <p className="text-sm font-medium text-gray-700 truncate">{nombreCompleto(u)}</p>
                     <p className="text-xs text-gray-400 truncate">
                       {u.usuario ? `@${u.usuario} · ` : ''}{u.email} · {ROL_LABEL[u.rol]}{u.sucursal_nombre ? ` · ${u.sucursal_nombre}` : ''}
                     </p>
@@ -212,7 +221,10 @@ export default function Usuarios() {
           <form onSubmit={crear} className="space-y-4">
             <Campo label="Email" type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} autoFocus />
             <Campo label="Nombre de usuario (opcional, para loguearse sin el mail)" value={form.usuario} onChange={(e) => setForm({ ...form, usuario: e.target.value })} />
-            <Campo label="Nombre" value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} />
+            <div className="grid grid-cols-2 gap-3">
+              <Campo label="Nombre" value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} />
+              <Campo label="Apellido" value={form.apellido} onChange={(e) => setForm({ ...form, apellido: e.target.value })} />
+            </div>
             {!esGerente && (
               <Select label="Rol" value={form.rol} onChange={(e) => setForm({ ...form, rol: e.target.value })}>
                 {ROLES.map((r) => <option key={r} value={r}>{ROL_LABEL[r]}</option>)}
@@ -243,7 +255,10 @@ export default function Usuarios() {
         <Modal titulo="Editar usuario" onClose={() => setEditando(null)}>
           <form onSubmit={guardarEdicion} className="space-y-4">
             <Campo label="Email" type="email" required value={formEdit.email} onChange={(e) => setFormEdit({ ...formEdit, email: e.target.value })} autoFocus />
-            <Campo label="Nombre" value={formEdit.nombre} onChange={(e) => setFormEdit({ ...formEdit, nombre: e.target.value })} />
+            <div className="grid grid-cols-2 gap-3">
+              <Campo label="Nombre" value={formEdit.nombre} onChange={(e) => setFormEdit({ ...formEdit, nombre: e.target.value })} />
+              <Campo label="Apellido" value={formEdit.apellido} onChange={(e) => setFormEdit({ ...formEdit, apellido: e.target.value })} />
+            </div>
             <Campo label="Nombre de usuario" value={formEdit.usuario} onChange={(e) => setFormEdit({ ...formEdit, usuario: e.target.value })} />
             {!esGerente && (
               <Select label="Rol" value={formEdit.rol} onChange={(e) => setFormEdit({ ...formEdit, rol: e.target.value, sucursal_id: '' })}>
@@ -291,7 +306,7 @@ export default function Usuarios() {
         <Modal titulo="Eliminar usuario" onClose={() => setEliminando(null)} ancho="max-w-sm">
           <div className="space-y-3">
             <p className="text-sm text-gray-600">
-              ¿Eliminar a <strong>{eliminando.nombre || eliminando.email}</strong>? Deja de aparecer en las listas y de poder loguearse, pero su nombre se conserva en el historial de tareas y auditorías. Se puede reactivar más adelante.
+              ¿Eliminar a <strong>{nombreCompleto(eliminando)}</strong>? Deja de aparecer en las listas y de poder loguearse, pero su nombre se conserva en el historial de tareas y auditorías. Se puede reactivar más adelante.
             </p>
             <div className="flex gap-2">
               <Boton ancho="w-auto" variante="peligro" onClick={async () => { await cambiarActivo(eliminando); setEliminando(null); }}>Sí, eliminar</Boton>

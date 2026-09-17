@@ -7,6 +7,8 @@ const PUESTOS = ['COCINA', 'CAJA', 'REFUERZO_COCINA'];
 const PUESTO_LABEL = { COCINA: 'Cocina', CAJA: 'Caja', REFUERZO_COCINA: 'Refuerzo cocina' };
 const VARIABLES = [
   { token: '{nombre}', label: 'Nombre' },
+  { token: '{apellido}', label: 'Apellido' },
+  { token: '{nombre_completo}', label: 'Nombre completo' },
   { token: '{usuario}', label: 'Usuario' },
   { token: '{sucursal}', label: 'Sucursal' },
   { token: '{fecha}', label: 'Fecha' },

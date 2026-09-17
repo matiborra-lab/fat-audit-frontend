@@ -16,6 +16,10 @@ function clave(dia, turno) {
   return `${dia}|${turno}`;
 }
 
+function nombreCompleto(u) {
+  return [u.nombre, u.apellido].filter(Boolean).join(' ') || u.email;
+}
+
 function ModalPersonal({ sucursal, onClose }) {
   const [personal, setPersonal] = useState(null);
 
@@ -43,7 +47,7 @@ function ModalPersonal({ sucursal, onClose }) {
             {gerentes.length === 0 && <p className="text-sm text-gray-400">Sin gerente asignado.</p>}
             <div className="space-y-1">
               {gerentes.map((u) => (
-                <p key={u.id} className="text-sm text-gray-800">{u.nombre || u.email} <span className="text-xs text-gray-400">({ROL_LABEL[u.rol]})</span></p>
+                <p key={u.id} className="text-sm text-gray-800">{nombreCompleto(u)} <span className="text-xs text-gray-400">({ROL_LABEL[u.rol]})</span></p>
               ))}
             </div>
           </div>
@@ -53,7 +57,7 @@ function ModalPersonal({ sucursal, onClose }) {
               {porPuesto[p].length === 0 && <p className="text-sm text-gray-400">Nadie asignado todavía.</p>}
               <div className="space-y-1">
                 {porPuesto[p].map((u) => (
-                  <p key={u.id} className="text-sm text-gray-800">{u.nombre || u.email}</p>
+                  <p key={u.id} className="text-sm text-gray-800">{nombreCompleto(u)}</p>
                 ))}
               </div>
             </div>
