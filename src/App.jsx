@@ -19,6 +19,8 @@ import Configuracion from './pages/Configuracion';
 import Tareas from './pages/Tareas';
 import ReportesProgramados from './pages/ReportesProgramados';
 import CentroAyuda from './pages/CentroAyuda';
+import Comunicados from './pages/Comunicados';
+import ComunicadoDetalle from './pages/ComunicadoDetalle';
 
 export default function App() {
   return (
@@ -54,6 +56,15 @@ export default function App() {
               {/* Sin gate de rol: el Centro de ayuda filtra sus propias
                   categorías/artículos según el rol (ver ayudaContenido.js). */}
               <Route path="/ayuda" element={<CentroAyuda />} />
+              {/* Sin gate de rol: cualquiera puede abrir un comunicado que le
+                  llegó a él (el backend ya scopea a la propia notificación en
+                  /api/notificaciones/:id) - armar y mandar uno nuevo sí es
+                  solo Admin, ver más abajo. */}
+              <Route path="/comunicados/:notificacionId" element={<ComunicadoDetalle />} />
+
+              <Route element={<RequireRole roles={['ADMIN']} />}>
+                <Route path="/comunicados" element={<Comunicados />} />
+              </Route>
 
               <Route element={<RequireRole roles={['ADMIN', 'AUDITOR', 'GERENTE']} />}>
                 <Route path="/historial" element={<Historial />} />

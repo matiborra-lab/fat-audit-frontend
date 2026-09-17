@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../api/client';
 import { soportaPush, suscripcionActual, activarPush, desactivarPush } from '../utils/push';
@@ -57,6 +57,8 @@ function itemsDeNav(rol) {
 
   items.push({ to: '/dashboard', label: 'Dashboard' });
 
+  if (rol === 'ADMIN') items.push({ to: '/comunicados', label: 'Comunicados' });
+
   // Sucursales/Usuarios/Tareas solo para quien gestiona (Admin/Gerente);
   // Notificaciones (preferencias personales) para cualquiera que llegue
   // hasta acá (incluido Auditor, que no tiene el resto de Configuración).
@@ -73,6 +75,7 @@ function itemsDeNav(rol) {
 }
 
 function CampanaNotificaciones({ abrirHaciaArriba = false }) {
+  const navigate = useNavigate();
   const [notificaciones, setNotificaciones] = useState([]);
   const [abierto, setAbierto] = useState(false);
   // 'no_soportado' | 'desactivado' | 'activado' | 'activando'
@@ -95,9 +98,17 @@ function CampanaNotificaciones({ abrirHaciaArriba = false }) {
 
   const sinLeer = notificaciones.filter((n) => !n.leida_en).length;
 
+  // Un comunicado "completo" (con descripción, foto o enlace, ver
+  // Comunicados.jsx) abre su propia vista al tocarlo, además de marcarse
+  // leído - uno "solo push" (sin nada de eso) no lleva a ningún lado, se
+  // queda en la campana como cualquier otra notificación.
   async function marcarLeida(n) {
     if (!n.leida_en) await api.post(`/api/notificaciones/${n.id}/leida`);
     recargar();
+    if (n.tipo === 'COMUNICADO' && !n.payload_json?.solo_push) {
+      setAbierto(false);
+      navigate(`/comunicados/${n.id}`);
+    }
   }
 
   async function alternarPush() {
