@@ -763,7 +763,7 @@ function EventoItem({ evento, usuario, puedeEditar, onCambio, onIniciarRun }) {
           <p className="text-sm font-medium text-gray-900 mt-1">{iconoEvento(evento)} {evento.titulo}</p>
           <p className="text-xs text-gray-400">
             {evento.sucursal_nombre}
-            {evento.tipo !== 'EVENTO_ESPECIAL' && evento.tipo !== 'SEGUIMIENTO' && ` · ${new Date(evento.fecha_hora).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}`}
+            {evento.tipo !== 'EVENTO_ESPECIAL' && evento.tipo !== 'SEGUIMIENTO' && evento.hora_definida !== false && ` · ${new Date(evento.fecha_hora).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}`}
             {evento.responsable_nombre
               ? ` · ${evento.responsable_nombre}`
               : (evento.tipo === 'TAREA' && evento.puesto)
@@ -989,9 +989,10 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, sucursalEnVista, on
   const [form, setForm] = useState({
     sucursal_id: esGerente ? usuario.sucursal_id : '',
     tipo: 'AUDITORIA', template_id: '', titulo: '', descripcion: '', responsable_user_id: '', responsable_nombre: '', fecha: '', hora: '10:00',
-    recurrenciaTipo: 'NINGUNA', recurrenciaHasta: '',
-    // Específico de TAREA:
+    // Específico de TAREA (catálogo/"Otro"):
     tareaCatalogoId: '', tituloOtro: '', fotoRequerida: false,
+    // Recurrencia rica, compartida por TAREA y AUDITORIA (ver el bloque
+    // "Repetir" del paso 2 - EVENTO_ESPECIAL no la usa, siempre una fecha suelta):
     tareaRecurrencia: 'NINGUNA', diasSemana: [], diasMes: [], sinHora: false, fechaHasta: '',
     // Responsable(s) de TAREA - lista mixta de personas puntuales y/o
     // "sectores" (ver SelectorResponsablesTarea); un chip de sector no lleva
@@ -1112,27 +1113,39 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, sucursalEnVista, on
           fecha_desde: form.fecha || aClaveDia(new Date()),
           fecha_hasta: form.fechaHasta || null,
         });
+      } else if (form.tipo === 'AUDITORIA') {
+        if (!sucursalId) throw new Error('Elegí una sucursal');
+        if (!form.template_id) throw new Error('Elegí una plantilla');
+        if (form.tareaRecurrencia === 'SEMANAL' && !form.diasSemana.length) throw new Error('Elegí al menos un día de la semana');
+        if (form.tareaRecurrencia === 'MENSUAL' && !form.diasMes.length) throw new Error('Elegí al menos un día del mes');
+        await api.post('/api/calendario', {
+          sucursal_id: Number(sucursalId),
+          tipo: 'AUDITORIA',
+          template_id: Number(form.template_id),
+          responsable_user_id: form.responsable_user_id || null,
+          frecuencia: form.tareaRecurrencia,
+          dias_semana: form.tareaRecurrencia === 'SEMANAL' ? form.diasSemana : undefined,
+          dias_mes: form.tareaRecurrencia === 'MENSUAL' ? form.diasMes : undefined,
+          hora: form.sinHora ? null : form.hora,
+          fecha_desde: form.fecha || aClaveDia(new Date()),
+          fecha_hasta: form.fechaHasta || null,
+        });
       } else {
-        if (form.tipo === 'TAREA') {
-          if (!sucursalId) throw new Error('Elegí una sucursal');
-          if (!esOtro && !form.tareaCatalogoId) throw new Error('Elegí una tarea');
-          if (esOtro && !form.tituloOtro) throw new Error('Escribí una descripción');
-        } else if (!form.fecha) {
-          throw new Error('Elegí una fecha');
-        }
-        // Para TAREA, sin fecha es "desde el momento" (ahora) - no bloquea.
+        // Único tipo que llega hasta acá: TAREA sin recurrencia (una sola vez).
+        if (!sucursalId) throw new Error('Elegí una sucursal');
+        if (!esOtro && !form.tareaCatalogoId) throw new Error('Elegí una tarea');
+        if (esOtro && !form.tituloOtro) throw new Error('Escribí una descripción');
+        // Sin fecha es "desde el momento" (ahora) - no bloquea.
         const fechaEfectiva = form.fecha || aClaveDia(new Date());
         await api.post('/api/calendario', {
           sucursal_id: Number(sucursalId),
-          tipo: form.tipo,
-          template_id: form.tipo !== 'TAREA' ? Number(form.template_id) : null,
-          tarea_catalogo_id: form.tipo === 'TAREA' && !esOtro ? Number(form.tareaCatalogoId) || null : null,
-          titulo: form.tipo === 'TAREA' && esOtro ? form.tituloOtro : null,
-          foto_requerida: form.tipo === 'TAREA' && esOtro ? form.fotoRequerida : undefined,
-          ...(form.tipo === 'TAREA' ? payloadResponsablesTarea() : { responsable_user_id: form.responsable_user_id || null }),
-          fecha_hora: `${fechaEfectiva}T${form.sinHora && form.tipo === 'TAREA' ? '00:00' : form.hora}:00`,
-          hora_definida: form.tipo === 'TAREA' ? !form.sinHora : undefined,
-          recurrencia: form.tipo !== 'TAREA' && form.recurrenciaTipo !== 'NINGUNA' ? { tipo: form.recurrenciaTipo, hasta: form.recurrenciaHasta } : null,
+          tipo: 'TAREA',
+          tarea_catalogo_id: !esOtro ? Number(form.tareaCatalogoId) || null : null,
+          titulo: esOtro ? form.tituloOtro : null,
+          foto_requerida: esOtro ? form.fotoRequerida : undefined,
+          ...payloadResponsablesTarea(),
+          fecha_hora: `${fechaEfectiva}T${form.sinHora ? '00:00' : form.hora}:00`,
+          hora_definida: !form.sinHora,
         });
       }
       onCreado();
@@ -1274,13 +1287,22 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, sucursalEnVista, on
         )}
 
         {form.tipo !== 'TAREA' && (
-          <BuscadorResponsable
-            sucursalId={sucursalId}
-            todasLasSucursales={form.tipo === 'EVENTO_ESPECIAL' && form.sucursalesEspecialesIds === null}
-            nombreValue={form.responsable_nombre}
-            label={form.tipo === 'EVENTO_ESPECIAL' ? 'Responsable (opcional)' : 'Responsable'}
-            onChange={(id, u) => setForm({ ...form, responsable_user_id: id, responsable_nombre: u ? (u.nombre || u.email) : '' })}
-          />
+          <div>
+            <BuscadorResponsable
+              sucursalId={sucursalId}
+              todasLasSucursales={form.tipo === 'EVENTO_ESPECIAL' && form.sucursalesEspecialesIds === null}
+              nombreValue={form.responsable_nombre}
+              label="Responsable (opcional)"
+              onChange={(id, u) => setForm({ ...form, responsable_user_id: id, responsable_nombre: u ? (u.nombre || u.email) : '' })}
+            />
+            {form.tipo === 'AUDITORIA' && (
+              <p className="text-[11px] text-gray-400 mt-1">
+                No hace falta que sea justo esta persona: cualquier gerente de la sucursal puede completarla igual
+                (o dejalo vacío para que la vea cualquiera). Con que alguien la haga, ya queda resuelta para todos -
+                el historial siempre registra quién la hizo.
+              </p>
+            )}
+          </div>
         )}
 
         {form.tipo === 'TAREA' && (
@@ -1295,7 +1317,7 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, sucursalEnVista, on
           </div>
         )}
 
-        {form.tipo === 'TAREA' ? (
+        {form.tipo === 'TAREA' || form.tipo === 'AUDITORIA' ? (
           <div className="space-y-3">
             <Select label="Repetir" value={form.tareaRecurrencia} onChange={(e) => setForm({ ...form, tareaRecurrencia: e.target.value, diasSemana: [], diasMes: [] })}>
               <option value="NINGUNA">No se repite (una sola vez)</option>
@@ -1313,7 +1335,7 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, sucursalEnVista, on
                 <Campo label="Hasta (opcional)" type="date" value={form.fechaHasta} onChange={(e) => setForm({ ...form, fechaHasta: e.target.value })} />
               )}
             </div>
-            <p className="text-[11px] text-gray-400 -mt-2">Si no ponés {form.tareaRecurrencia === 'NINGUNA' ? 'fecha' : 'desde'}, arranca desde el momento.</p>
+            <p className="text-[11px] text-gray-400 -mt-2">Si no ponés {form.tareaRecurrencia === 'NINGUNA' ? 'fecha' : 'desde'}, arranca desde hoy.</p>
 
             <label className="flex items-center gap-2 text-sm text-gray-600">
               <input type="checkbox" checked={form.sinHora} onChange={(e) => setForm({ ...form, sinHora: e.target.checked })} />
@@ -1337,25 +1359,8 @@ function ModalNuevoEvento({ sucursales, plantillas, usuario, sucursalEnVista, on
               </div>
             )}
           </div>
-        ) : form.tipo === 'EVENTO_ESPECIAL' ? (
-          <Campo label="Fecha" type="date" required value={form.fecha} onChange={(e) => setForm({ ...form, fecha: e.target.value })} />
         ) : (
-          <>
-            <div className="grid grid-cols-2 gap-3">
-              <Campo label="Fecha" type="date" required value={form.fecha} onChange={(e) => setForm({ ...form, fecha: e.target.value })} />
-              <Campo label="Hora" type="time" required value={form.hora} onChange={(e) => setForm({ ...form, hora: e.target.value })} />
-            </div>
-
-            <Select label="Repetir" value={form.recurrenciaTipo} onChange={(e) => setForm({ ...form, recurrenciaTipo: e.target.value })}>
-              <option value="NINGUNA">No se repite</option>
-              <option value="DIARIA">Todos los días</option>
-              <option value="SEMANAL">Todas las semanas</option>
-              <option value="MENSUAL">Todos los meses</option>
-            </Select>
-            {form.recurrenciaTipo !== 'NINGUNA' && (
-              <Campo label="Repetir hasta" type="date" required value={form.recurrenciaHasta} onChange={(e) => setForm({ ...form, recurrenciaHasta: e.target.value })} />
-            )}
-          </>
+          <Campo label="Fecha" type="date" required value={form.fecha} onChange={(e) => setForm({ ...form, fecha: e.target.value })} />
         )}
 
         {error && <p className="text-sm text-fat-bordo-600">{error}</p>}

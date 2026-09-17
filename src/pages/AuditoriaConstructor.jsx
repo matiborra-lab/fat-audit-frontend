@@ -8,7 +8,10 @@ const ESTADO_ESTILOS = {
   PUBLICADA: 'bg-green-100 text-green-700',
   ARCHIVADA: 'bg-gray-100 text-gray-400',
 };
-const TIPOS_RESPUESTA = ['ESCALA_5', 'ESCALA_10', 'SI_NO', 'CHECKBOX', 'OPCION_MULTIPLE', 'NUMERO', 'TEXTO', 'FECHA'];
+// Checkbox primero: es el tipo de respuesta más común al cargar una
+// plantilla nueva, así arranca seleccionado por defecto en items nuevos
+// (ver nuevoItem) sin tener que elegirlo cada vez.
+const TIPOS_RESPUESTA = ['CHECKBOX', 'SI_NO', 'ESCALA_5', 'ESCALA_10', 'OPCION_MULTIPLE', 'NUMERO', 'TEXTO', 'FECHA'];
 // Unicos tipos que aportan puntaje - TEXTO/FECHA/NUMERO son solo
 // informativos y nunca tienen peso (ver src/scoring en el backend).
 const TIPOS_PUNTUABLES = ['SI_NO', 'CHECKBOX', 'ESCALA_5', 'ESCALA_10', 'OPCION_MULTIPLE'];
@@ -104,7 +107,7 @@ function BotonesOrden({ i, total, onMover }) {
 
 function nuevoItem(sector, area) {
   return {
-    sector, area, texto: '', ayuda_texto: '', tipo_respuesta: 'ESCALA_5', opciones_json: null, peso: null,
+    sector, area, texto: '', ayuda_texto: '', tipo_respuesta: 'CHECKBOX', opciones_json: null, peso: null,
     critico: false, informe_in_situ: false, evidencia_requerida: 'NINGUNA', permite_no_aplica: true, reglas: [],
   };
 }
@@ -396,8 +399,13 @@ function SeccionItems({ estructura, actualizar }) {
     copia[i] = { ...copia[i], [campo]: valor };
     actualizar('items', copia);
   }
-  const sectorPorDefecto = estructura.sectores[0]?.nombre || '';
-  const areaPorDefecto = estructura.areas[0]?.nombre || '';
+  // "+ Agregar ítem" arranca con el sector/área del último ítem cargado (no
+  // siempre el primero de la plantilla) - así, cargando varios ítems
+  // seguidos del mismo sector/área, no hay que volver a elegirlos cada vez;
+  // alcanza con cambiarlos a mano cuando corresponda uno distinto.
+  const ultimoItem = estructura.items[estructura.items.length - 1];
+  const sectorPorDefecto = ultimoItem?.sector || estructura.sectores[0]?.nombre || '';
+  const areaPorDefecto = ultimoItem?.area || estructura.areas[0]?.nombre || '';
 
   return (
     <Tarjeta className="p-4">
@@ -456,6 +464,19 @@ function SeccionItems({ estructura, actualizar }) {
                   </select>
                 </label>
               </div>
+              {it.tipo_respuesta === 'SI_NO' && (
+                <label className="flex items-center gap-2 text-xs text-gray-600">
+                  Puntúa a favor:
+                  <select
+                    className="rounded border border-gray-300 text-xs"
+                    value={it.opciones_json?.correcta === 'NO' ? 'NO' : 'SI'}
+                    onChange={(e) => set(i, 'opciones_json', { correcta: e.target.value })}
+                  >
+                    <option value="SI">Sí</option>
+                    <option value="NO">No</option>
+                  </select>
+                </label>
+              )}
               {it.tipo_respuesta === 'OPCION_MULTIPLE' && <OpcionesEditor item={it} index={i} set={set} />}
               <ReglasEditor item={it} index={i} set={set} />
             </div>
