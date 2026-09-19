@@ -36,7 +36,9 @@ export default function App() {
                 sidebar ni menú) mientras se ejecuta una auditoría - ver
                 doc V2, Experiencia móvil. Ejecucion.jsx arma su propio
                 encabezado mínimo. */}
-            <Route element={<RequireRole roles={['ADMIN', 'AUDITOR', 'GERENTE']} />}>
+            {/* Colaborador incluido: puede ejecutar una auditoría que le
+                asignaron (ver POST /api/calendario/:id/iniciar). */}
+            <Route element={<RequireRole roles={['ADMIN', 'AUDITOR', 'GERENTE', 'COLABORADOR']} />}>
               <Route path="/ejecucion/:id" element={<Ejecucion />} />
             </Route>
 

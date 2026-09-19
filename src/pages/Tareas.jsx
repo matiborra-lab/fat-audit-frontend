@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { api } from '../api/client';
+import { api, subirArchivoFirmado } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { Tarjeta, Campo, Boton, Select, Modal, Toast, Cargando, BotonCamara } from '../components/ui';
 import BuscadorResponsable from '../components/BuscadorResponsable';
@@ -291,7 +291,7 @@ function FilaTareaPendiente({ evento, puedeGestionar, onCambio, onEditar }) {
       let evidenciaUrl = null;
       if (archivo) {
         const { uploadUrl, publicUrl } = await api.post(`/api/calendario/${evento.id}/evidencia/url-subida`, { content_type: archivo.type });
-        await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': archivo.type }, body: archivo });
+        await subirArchivoFirmado(uploadUrl, archivo);
         evidenciaUrl = publicUrl;
       }
       await api.post(`/api/calendario/${evento.id}/completar`, {

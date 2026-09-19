@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { api } from '../api/client';
+import { api, subirArchivoFirmado } from '../api/client';
 import { Boton, Cargando, EtiquetaArea } from '../components/ui';
 
 function claveBorrador(runId) {
@@ -92,7 +92,25 @@ export default function Ejecucion() {
       const respuestasIniciales = {};
       for (const r of data.respuestas) respuestasIniciales[r.item_id] = { valor_json: r.valor_json, comentario: r.comentario, no_aplica: r.no_aplica };
       const borrador = JSON.parse(localStorage.getItem(claveBorrador(id)) || '{}');
-      setRespuestas({ ...respuestasIniciales, ...borrador });
+      // El borrador local puede tener respuestas que nunca llegaron al
+      // servidor (se cortó la conexión o se cerró la app justo al marcarlas):
+      // en pantalla se ven completas, pero el servidor las tiene vacías y al
+      // finalizar reclama "falta responder". Se marcan como pendientes y se
+      // mandan ahora.
+      const combinadas = { ...respuestasIniciales };
+      const sinSincronizar = [];
+      for (const [itemId, local] of Object.entries(borrador)) {
+        const servidor = respuestasIniciales[itemId];
+        const igual = servidor
+          && JSON.stringify(servidor.valor_json ?? null) === JSON.stringify(local.valor_json ?? null)
+          && (servidor.comentario || '') === (local.comentario || '')
+          && !!servidor.no_aplica === !!local.no_aplica;
+        const vacia = local.valor_json == null && !local.comentario && !local.no_aplica;
+        combinadas[itemId] = { ...local, pendiente: !igual && !vacia };
+        if (!igual && !vacia) sinSincronizar.push([Number(itemId), local]);
+      }
+      setRespuestas(combinadas);
+      for (const [itemId, local] of sinSincronizar) guardarRespuesta(itemId, local);
 
       const respuestaPorId = new Map(data.respuestas.map((r) => [r.id, r.item_id]));
       const evidenciasIniciales = {};
@@ -112,7 +130,10 @@ export default function Ejecucion() {
       }
     }
     window.addEventListener('online', reintentarPendientes);
-    return () => window.removeEventListener('online', reintentarPendientes);
+    // El evento 'online' no siempre dispara (ej. una señal débil que va y
+    // viene sin llegar a "desconectarse") - también se reintenta cada tanto.
+    const timer = setInterval(reintentarPendientes, 15000);
+    return () => { window.removeEventListener('online', reintentarPendientes); clearInterval(timer); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [respuestas]);
 
@@ -138,6 +159,8 @@ export default function Ejecucion() {
     const r = respuestas[i.id];
     return r && (r.valor_json != null || r.no_aplica);
   }).length;
+
+  const sinGuardar = Object.values(respuestas).filter((r) => r.pendiente).length;
 
   function guardarLocal(itemId, cambios) {
     setRespuestas((prev) => {
@@ -180,7 +203,7 @@ export default function Ejecucion() {
     try {
       const tipo = file.type.startsWith('video') ? 'VIDEO' : 'FOTO';
       const { uploadUrl, publicUrl } = await api.post(`/api/runs/${id}/evidencia/url-subida`, { content_type: file.type });
-      await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
+      await subirArchivoFirmado(uploadUrl, file);
 
       // Miniatura opcional: si falla (formato raro, canvas bloqueado, etc.)
       // no aborta la subida - la evidencia queda sin thumbnail_url y la UI
@@ -190,7 +213,7 @@ export default function Ejecucion() {
         const miniatura = tipo === 'FOTO' ? await generarMiniaturaImagen(file) : await generarMiniaturaVideo(file);
         if (miniatura) {
           const { uploadUrl: urlMini, publicUrl: publicMini } = await api.post(`/api/runs/${id}/evidencia/url-subida`, { content_type: 'image/jpeg' });
-          await fetch(urlMini, { method: 'PUT', headers: { 'Content-Type': 'image/jpeg' }, body: miniatura });
+          await subirArchivoFirmado(urlMini, miniatura, 'image/jpeg');
           thumbnailUrl = publicMini;
         }
       } catch {
@@ -225,6 +248,19 @@ export default function Ejecucion() {
     setFinalizando(true);
     setProblemas(null);
     try {
+      // Antes de cerrar, se manda lo que haya quedado sin guardar (ver la
+      // nota en la carga inicial) - si falla, no tiene sentido pedirle al
+      // servidor que valide respuestas que todavía no tiene.
+      const pendientes = Object.entries(respuestas).filter(([, r]) => r.pendiente);
+      if (pendientes.length) {
+        try {
+          await Promise.all(pendientes.map(([itemId, r]) => api.put(`/api/runs/${id}/respuestas/${itemId}`, { valor_json: r.valor_json ?? null, comentario: r.comentario ?? null, no_aplica: !!r.no_aplica })));
+          setRespuestas((prev) => Object.fromEntries(Object.entries(prev).map(([k, r]) => [k, { ...r, pendiente: false }])));
+        } catch {
+          setProblemas(['No se pudieron guardar algunas respuestas - revisá tu conexión y volvé a tocar "Finalizar auditoría".']);
+          return;
+        }
+      }
       const run2 = await api.post(`/api/runs/${id}/finalizar`, { firma_nombre: firma });
       localStorage.removeItem(claveBorrador(id));
       navigate(`/historial/${run2.id}`, { replace: true });
@@ -252,7 +288,10 @@ export default function Ejecucion() {
           <div className="flex items-center justify-between gap-2">
             <button onClick={pedirSalir} aria-label="Salir" className="text-gray-500 hover:text-gray-700 text-xl leading-none px-1 shrink-0">&times;</button>
             <span className="text-sm font-medium text-gray-700 truncate text-center flex-1">{esResumen ? 'Resumen' : sectorActual.nombre}</span>
-            <span className="text-xs text-gray-400 shrink-0">{respondidos}/{totalItems}</span>
+            <span className="text-xs text-gray-400 shrink-0">
+              {sinGuardar > 0 && <span className="text-fat-bordo-600 mr-1.5" title="Estas respuestas todavía no llegaron al servidor - se reintentan solas al recuperar conexión">⚠ {sinGuardar} sin guardar</span>}
+              {respondidos}/{totalItems}
+            </span>
           </div>
           <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden mt-2">
             <div className="h-full bg-fat-bordo-500 transition-all" style={{ width: `${(respondidos / totalItems) * 100}%` }} />

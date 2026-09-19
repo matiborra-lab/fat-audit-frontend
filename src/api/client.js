@@ -47,6 +47,21 @@ async function pedido(metodo, ruta, body, { auth = true } = {}) {
   return data;
 }
 
+// Sube un archivo directo al bucket con una URL firmada (PUT). Navegador y
+// bucket hablan sin pasar por el backend, así que una falla acá (CORS,
+// conexión) llega como un TypeError opaco ("Load failed" en Safari, "Failed
+// to fetch" en Chrome) - se traduce a un mensaje claro y se valida el
+// status de la respuesta (un 4xx del bucket no tira excepción en fetch).
+export async function subirArchivoFirmado(uploadUrl, archivo, contentType = archivo.type) {
+  let resp;
+  try {
+    resp = await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': contentType }, body: archivo });
+  } catch (err) {
+    throw new Error('No se pudo subir el archivo (falló la conexión con el almacenamiento) - probá de nuevo.');
+  }
+  if (!resp.ok) throw new Error('El almacenamiento rechazó el archivo (error ' + resp.status + ') - probá de nuevo.');
+}
+
 export const api = {
   get: (ruta, opciones) => pedido('GET', ruta, null, opciones),
   post: (ruta, body, opciones) => pedido('POST', ruta, body, opciones),

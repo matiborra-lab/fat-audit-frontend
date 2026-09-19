@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { Tarjeta, Campo, Boton, Toast, Puntaje, Resultado, Cargando, EtiquetaArea } from '../components/ui';
@@ -139,7 +139,16 @@ export default function HistorialDetalle() {
       <Tarjeta className="p-4 flex flex-wrap items-center gap-4">
         <Puntaje valor={run.puntaje_total} semaforo={run.semaforo} tamano="lg" />
         <Resultado valor={run.resultado} />
-        {run.estado === 'EN_PROGRESO' && <span className="text-sm text-gray-400">Auditoría en progreso</span>}
+        {run.estado === 'EN_PROGRESO' && (
+          <>
+            <span className="text-sm text-gray-400">Auditoría en progreso</span>
+            {(usuario.rol === 'ADMIN' || usuario.rol === 'AUDITOR' || run.auditor_user_id === usuario.id) && (
+              <Link to={`/ejecucion/${run.id}`} className="inline-block text-sm font-medium rounded-lg py-2 px-4 transition bg-fat-bordo-500 hover:bg-fat-bordo-600 text-white">
+                Continuar auditoría
+              </Link>
+            )}
+          </>
+        )}
         {run.firma_nombre && <span className="text-sm text-gray-400 ml-auto">Firmado por {run.firma_nombre}</span>}
       </Tarjeta>
 

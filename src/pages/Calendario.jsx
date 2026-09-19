@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api } from '../api/client';
+import { api, subirArchivoFirmado } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { Tarjeta, Campo, Select, Boton, Modal, Toast, Cargando, BotonCamara, SelectorEmoji, SelectorSucursalesMultiple, SelectorDias, emojiClima } from '../components/ui';
 import BuscadorResponsable from '../components/BuscadorResponsable';
@@ -734,7 +734,7 @@ function EventoItem({ evento, usuario, puedeEditar, onCambio, onIniciarRun }) {
       let evidenciaUrl = null;
       if (archivo) {
         const { uploadUrl, publicUrl } = await api.post(`/api/calendario/${evento.id}/evidencia/url-subida`, { content_type: archivo.type });
-        await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': archivo.type }, body: archivo });
+        await subirArchivoFirmado(uploadUrl, archivo);
         evidenciaUrl = publicUrl;
       }
       await api.post(`/api/calendario/${evento.id}/completar`, { comentario, evidencia_url: evidenciaUrl, evidencia_tipo: evidenciaUrl ? 'FOTO' : null });
@@ -824,7 +824,15 @@ function EventoItem({ evento, usuario, puedeEditar, onCambio, onIniciarRun }) {
         </div>
       )}
 
-      {evento.run_id && <p className="text-xs text-gray-400 mt-1">Ya iniciada</p>}
+      {/* El evento queda COMPLETADA apenas se inicia la auditoría (ver
+          POST /api/calendario/:id/iniciar) - si se cortó a mitad de camino,
+          esta es la única forma de retomarla desde el calendario. */}
+      {evento.run_id && evento.run_estado === 'EN_PROGRESO' && (
+        <div className="mt-2">
+          <Boton ancho="w-auto" onClick={() => onIniciarRun(evento.run_id)}>Continuar auditoría</Boton>
+        </div>
+      )}
+      {evento.run_id && evento.run_estado !== 'EN_PROGRESO' && <p className="text-xs text-gray-400 mt-1">Ya iniciada</p>}
       {evento.completado_comentario && <p className="text-xs text-gray-600 mt-1 italic">"{evento.completado_comentario}"</p>}
 
       {error && <p className="text-xs text-fat-bordo-600 mt-1">{error}</p>}

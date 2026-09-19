@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { api } from '../api/client';
+import { api, subirArchivoFirmado } from '../api/client';
 import { Tarjeta, Select, Boton, Modal, Toast, Leyenda, Cargando } from '../components/ui';
 
 const ROL_LABEL = { ADMIN: 'Admin', AUDITOR: 'Auditor', GERENTE: 'Gerente', COLABORADOR: 'Colaborador' };
@@ -204,13 +204,7 @@ export default function Comunicados() {
   async function subirImagenSiHaceFalta() {
     if (!archivo) return imagenUrlPrevia || null;
     const { uploadUrl, publicUrl } = await api.post('/api/comunicados/imagen/url-subida', { content_type: archivo.type });
-    let resp;
-    try {
-      resp = await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': archivo.type }, body: archivo });
-    } catch (err) {
-      throw new Error('No se pudo subir la foto (revisá tu conexión) - probá de nuevo o sacala y mandalo sin foto.');
-    }
-    if (!resp.ok) throw new Error('No se pudo subir la foto (el servidor de archivos devolvió un error) - probá de nuevo.');
+    await subirArchivoFirmado(uploadUrl, archivo);
     return publicUrl;
   }
 

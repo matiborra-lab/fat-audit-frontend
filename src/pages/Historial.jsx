@@ -15,6 +15,13 @@ function puedeEliminar(usuario, r) {
   return false;
 }
 
+// Retomar una auditoría que quedó EN_PROGRESO: Admin/Auditor cualquiera, el
+// resto (Gerente) solo la que arrancó él.
+function puedeContinuar(usuario, r) {
+  if (usuario.rol === 'ADMIN' || usuario.rol === 'AUDITOR') return true;
+  return r.auditor_user_id === usuario.id;
+}
+
 export default function Historial() {
   const { usuario } = useAuth();
   const [params, setParams] = useSearchParams();
@@ -86,7 +93,11 @@ export default function Historial() {
                 <div className="flex items-center gap-3 shrink-0">
                   <Puntaje valor={r.puntaje_total} semaforo={r.semaforo} />
                   <Resultado valor={r.resultado} />
-                  {r.estado === 'EN_PROGRESO' && <span className="text-xs text-gray-400">en progreso</span>}
+                  {r.estado === 'EN_PROGRESO' && (
+                    puedeContinuar(usuario, r)
+                      ? <Link to={`/ejecucion/${r.id}`} className="text-xs font-medium text-fat-bordo-600 hover:underline">Continuar</Link>
+                      : <span className="text-xs text-gray-400">en progreso</span>
+                  )}
                   {puedeEliminar(usuario, r) && (
                     <button
                       onClick={() => eliminar(r.id)}
