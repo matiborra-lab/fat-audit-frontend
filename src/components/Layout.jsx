@@ -67,6 +67,7 @@ function itemsDeNav(rol) {
     hijosConfig.push({ to: '/configuracion/sucursales', label: 'Sucursales' });
     hijosConfig.push({ to: '/configuracion/usuarios', label: rol === 'GERENTE' ? 'Colaboradores' : 'Usuarios' });
     if (rol === 'ADMIN') hijosConfig.push({ to: '/configuracion/tareas', label: 'Tareas' });
+    if (rol === 'ADMIN') hijosConfig.push({ to: '/configuracion/almacenamiento', label: 'Almacenamiento' });
   }
   hijosConfig.push({ to: '/configuracion/notificaciones', label: 'Notificaciones' });
   items.push({ label: 'Configuración', children: hijosConfig });

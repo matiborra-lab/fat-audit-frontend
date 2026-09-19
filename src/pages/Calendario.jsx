@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api, subirArchivoFirmado } from '../api/client';
+import { api, subirArchivo } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { Tarjeta, Campo, Select, Boton, Modal, Toast, Cargando, BotonCamara, SelectorEmoji, SelectorSucursalesMultiple, SelectorDias, emojiClima } from '../components/ui';
 import BuscadorResponsable from '../components/BuscadorResponsable';
@@ -733,9 +733,7 @@ function EventoItem({ evento, usuario, puedeEditar, onCambio, onIniciarRun }) {
     try {
       let evidenciaUrl = null;
       if (archivo) {
-        const { uploadUrl, publicUrl } = await api.post(`/api/calendario/${evento.id}/evidencia/url-subida`, { content_type: archivo.type });
-        await subirArchivoFirmado(uploadUrl, archivo);
-        evidenciaUrl = publicUrl;
+        evidenciaUrl = await subirArchivo({ rutaUrlSubida: `/api/calendario/${evento.id}/evidencia/url-subida`, carpeta: 'tareas', referencia: `tarea-${evento.id}`, archivo });
       }
       await api.post(`/api/calendario/${evento.id}/completar`, { comentario, evidencia_url: evidenciaUrl, evidencia_tipo: evidenciaUrl ? 'FOTO' : null });
       onCambio();

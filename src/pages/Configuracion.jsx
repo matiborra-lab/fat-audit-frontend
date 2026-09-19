@@ -4,6 +4,7 @@ import Sucursales from './Sucursales';
 import Usuarios from './Usuarios';
 import TareasCatalogo from './TareasCatalogo';
 import NotificacionPreferencias from './NotificacionPreferencias';
+import Almacenamiento from './Almacenamiento';
 
 // Agrupa Sucursales, Usuarios, el catálogo de tareas (solo Admin) y
 // Notificaciones (cualquier rol - preferencias personales) - ver plan
@@ -19,6 +20,7 @@ export default function Configuracion() {
     tabs.push({ key: 'sucursales', el: <Sucursales /> });
     tabs.push({ key: 'usuarios', el: <Usuarios /> });
     if (usuario.rol === 'ADMIN') tabs.push({ key: 'tareas', el: <TareasCatalogo /> });
+    if (usuario.rol === 'ADMIN') tabs.push({ key: 'almacenamiento', el: <Almacenamiento /> });
   }
   tabs.push({ key: 'notificaciones', el: <NotificacionPreferencias /> });
   const activa = tabs.find((t) => t.key === tab) || tabs[0];

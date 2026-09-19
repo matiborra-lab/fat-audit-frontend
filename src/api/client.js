@@ -52,14 +52,54 @@ async function pedido(metodo, ruta, body, { auth = true } = {}) {
 // conexión) llega como un TypeError opaco ("Load failed" en Safari, "Failed
 // to fetch" en Chrome) - se traduce a un mensaje claro y se valida el
 // status de la respuesta (un 4xx del bucket no tira excepción en fetch).
-export async function subirArchivoFirmado(uploadUrl, archivo, contentType = archivo.type) {
+async function subirArchivoFirmado(uploadUrl, archivo, contentType) {
   let resp;
   try {
     resp = await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': contentType }, body: archivo });
   } catch (err) {
-    throw new Error('No se pudo subir el archivo (falló la conexión con el almacenamiento) - probá de nuevo.');
+    throw new Error('falló la conexión con el almacenamiento');
   }
-  if (!resp.ok) throw new Error('El almacenamiento rechazó el archivo (error ' + resp.status + ') - probá de nuevo.');
+  if (!resp.ok) throw new Error('el almacenamiento rechazó el archivo (error ' + resp.status + ')');
+}
+
+// Respaldo: el archivo pasa por la API y el servidor lo sube al bucket (ver
+// src/server/storage.js) - funciona aunque el navegador no pueda hablar
+// directo con el bucket.
+async function subirPorServidor({ carpeta, referencia, archivo, contentType }) {
+  const token = obtenerToken();
+  let resp;
+  try {
+    resp = await fetch(`${API_URL}/api/storage/subir?carpeta=${carpeta}&ref=${encodeURIComponent(referencia)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': contentType, ...(token ? { Authorization: 'Bearer ' + token } : {}) },
+      body: archivo,
+    });
+  } catch (err) {
+    throw new Error('No se pudo subir el archivo: falló la conexión con el servidor. Revisá tu conexión e intentá de nuevo.');
+  }
+  if (resp.status === 413) throw new Error('El archivo es demasiado grande para subirlo (máx. 30 MB).');
+  const data = await resp.json().catch(() => null);
+  if (!resp.ok) throw new Error(data?.error || 'No se pudo subir el archivo (error ' + resp.status + ')');
+  return data.publicUrl;
+}
+
+// Sube un archivo y devuelve su URL pública. Primero intenta la subida
+// directa al bucket con URL firmada (`rutaUrlSubida` la pide a la API); si
+// el navegador no logra completarla (CORS, red del celular) cae a subirlo a
+// través de la API. Una vez que la directa falla, el resto de la sesión va
+// directo por el servidor (no tiene sentido reintentar lo que ya falló).
+let subidaDirectaRota = false;
+export async function subirArchivo({ rutaUrlSubida, carpeta, referencia, archivo, contentType = archivo.type }) {
+  if (!subidaDirectaRota) {
+    const { uploadUrl, publicUrl } = await api.post(rutaUrlSubida, { content_type: contentType });
+    try {
+      await subirArchivoFirmado(uploadUrl, archivo, contentType);
+      return publicUrl;
+    } catch (err) {
+      subidaDirectaRota = true;
+    }
+  }
+  return subirPorServidor({ carpeta, referencia, archivo, contentType });
 }
 
 export const api = {

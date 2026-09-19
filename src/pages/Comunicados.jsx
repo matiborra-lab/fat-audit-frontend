@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { api, subirArchivoFirmado } from '../api/client';
+import { api, subirArchivo } from '../api/client';
 import { Tarjeta, Select, Boton, Modal, Toast, Leyenda, Cargando } from '../components/ui';
 
 const ROL_LABEL = { ADMIN: 'Admin', AUDITOR: 'Auditor', GERENTE: 'Gerente', COLABORADOR: 'Colaborador' };
@@ -203,9 +203,7 @@ export default function Comunicados() {
 
   async function subirImagenSiHaceFalta() {
     if (!archivo) return imagenUrlPrevia || null;
-    const { uploadUrl, publicUrl } = await api.post('/api/comunicados/imagen/url-subida', { content_type: archivo.type });
-    await subirArchivoFirmado(uploadUrl, archivo);
-    return publicUrl;
+    return subirArchivo({ rutaUrlSubida: '/api/comunicados/imagen/url-subida', carpeta: 'comunicados', referencia: 'nuevo', archivo });
   }
 
   function limpiarFormulario() {

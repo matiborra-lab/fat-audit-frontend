@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { api, subirArchivoFirmado } from '../api/client';
+import { api, subirArchivo } from '../api/client';
 import { Boton, Cargando, EtiquetaArea } from '../components/ui';
 
 function claveBorrador(runId) {
@@ -202,8 +202,8 @@ export default function Ejecucion() {
     setSubiendo(item.id);
     try {
       const tipo = file.type.startsWith('video') ? 'VIDEO' : 'FOTO';
-      const { uploadUrl, publicUrl } = await api.post(`/api/runs/${id}/evidencia/url-subida`, { content_type: file.type });
-      await subirArchivoFirmado(uploadUrl, file);
+      const rutaUrlSubida = `/api/runs/${id}/evidencia/url-subida`;
+      const publicUrl = await subirArchivo({ rutaUrlSubida, carpeta: 'auditorias', referencia: id, archivo: file });
 
       // Miniatura opcional: si falla (formato raro, canvas bloqueado, etc.)
       // no aborta la subida - la evidencia queda sin thumbnail_url y la UI
@@ -212,9 +212,7 @@ export default function Ejecucion() {
       try {
         const miniatura = tipo === 'FOTO' ? await generarMiniaturaImagen(file) : await generarMiniaturaVideo(file);
         if (miniatura) {
-          const { uploadUrl: urlMini, publicUrl: publicMini } = await api.post(`/api/runs/${id}/evidencia/url-subida`, { content_type: 'image/jpeg' });
-          await subirArchivoFirmado(urlMini, miniatura, 'image/jpeg');
-          thumbnailUrl = publicMini;
+          thumbnailUrl = await subirArchivo({ rutaUrlSubida, carpeta: 'auditorias', referencia: id, archivo: miniatura, contentType: 'image/jpeg' });
         }
       } catch {
         // sin miniatura, no es bloqueante
