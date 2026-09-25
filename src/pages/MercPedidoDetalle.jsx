@@ -136,7 +136,8 @@ export default function MercPedidoDetalle() {
         <div className="border-t border-gray-100 px-4 py-3 space-y-1 text-sm">
           <div className="flex justify-between"><span className="text-gray-500">Total del pedido</span><span className="font-semibold text-gray-900">{pesos(pedido.total)}</span></div>
           <div className="flex justify-between"><span className="text-gray-500">Total abonado</span><span className="text-gray-900">{pesos(totalAbonado)}</span></div>
-          <div className="flex justify-between"><span className="text-gray-500">Saldo pendiente</span><span className={`font-semibold ${pedido.saldo > 0 ? 'text-fat-bordo-600' : 'text-green-700'}`}>{pesos(pedido.saldo)}</span></div>
+          <div className="flex justify-between"><span className="text-gray-500">Saldo pendiente</span><span className={`font-semibold ${pedido.saldo > 0 ? 'text-fat-bordo-600' : 'text-green-700'}`}>{pedido.estado === 'RETIRADO' ? pesos(pedido.saldo) : '—'}</span></div>
+          {pedido.estado !== 'RETIRADO' && <p className="text-xs text-gray-400 pt-1">{pedido.estado === 'CANCELADO' ? 'Pedido cancelado: no genera deuda.' : 'La deuda se genera cuando el pedido es retirado.'}</p>}
         </div>
       </Tarjeta>
 
@@ -166,7 +167,7 @@ export default function MercPedidoDetalle() {
       <Tarjeta className="p-4">
         <p className="text-sm font-medium text-gray-900 mb-1">Historial financiero</p>
         <p className="text-xs text-gray-500 mb-3">
-          Total original {pesos(pedido.total)} · Abonado {pesos(totalAbonado)} · Saldo pendiente {pesos(pedido.saldo)}
+          Total original {pesos(pedido.total)} · Abonado {pesos(totalAbonado)} · Saldo pendiente {pedido.estado === 'RETIRADO' ? pesos(pedido.saldo) : '— (se genera al retirar)'}
         </p>
         {pedido.pagos.length === 0 ? (
           <p className="text-sm text-gray-400">Todavía no se registraron pagos.</p>

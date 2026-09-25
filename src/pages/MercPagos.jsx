@@ -4,7 +4,7 @@ import { api, descargarPdf } from '../api/client';
 import { Tarjeta, Boton, Modal, Select, Toast, Cargando } from '../components/ui';
 import { EstadoPedido, Editado } from '../components/MercUI';
 import MercFiltros, { FILTROS_VACIOS, queryDeFiltros } from '../components/MercFiltros';
-import { pesos, numeroPedido, fechaCorta, textoDemora } from '../utils/mercaderia';
+import { pesos, textoSaldo, numeroPedido, fechaCorta, textoDemora } from '../utils/mercaderia';
 
 function Indicador({ etiqueta, valor, destacado }) {
   return (
@@ -80,7 +80,7 @@ export default function MercPagos() {
                   <div className="grid grid-cols-3 gap-2 mt-2 text-xs">
                     <div><p className="text-gray-400">Total</p><p className="text-gray-900 font-medium">{pesos(p.total)}</p></div>
                     <div><p className="text-gray-400">Abonado</p><p className="text-gray-900 font-medium">{pesos(p.abonado)}</p></div>
-                    <div><p className="text-gray-400">Saldo</p><p className={`font-semibold ${p.saldo > 0 ? 'text-fat-bordo-600' : 'text-gray-400'}`}>{pesos(p.saldo)}</p></div>
+                    <div><p className="text-gray-400">Saldo</p><p className={`font-semibold ${p.saldo > 0 ? 'text-fat-bordo-600' : 'text-gray-400'}`}>{textoSaldo(p)}</p></div>
                   </div>
                   {p.saldo > 0 && <p className="text-xs text-gray-400 mt-1">Demora: {textoDemora(p.dias_demora)}</p>}
                 </Tarjeta>
@@ -108,7 +108,7 @@ export default function MercPagos() {
                     <td className="px-2 xl:px-3 py-2 text-gray-700">{p.responsable_nombre}</td>
                     <td className="px-2 xl:px-3 py-2 text-right text-gray-900">{pesos(p.total)}</td>
                     <td className="px-2 xl:px-3 py-2 text-right text-gray-700">{pesos(p.abonado)}</td>
-                    <td className={`px-3 py-2 text-right ${p.saldo > 0 ? 'text-fat-bordo-600 font-semibold' : 'text-gray-400'}`}>{pesos(p.saldo)}</td>
+                    <td className={`px-3 py-2 text-right ${p.saldo > 0 ? 'text-fat-bordo-600 font-semibold' : 'text-gray-400'}`}>{textoSaldo(p)}</td>
                     <td className="px-2 xl:px-3 py-2 text-right text-gray-500">{textoDemora(p.dias_demora)}</td>
                     <td className="px-2 xl:px-3 py-2"><EstadoPedido estado={p.estado} /></td>
                   </tr>

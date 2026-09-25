@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
-import { Tarjeta, Cargando } from '../components/ui';
-import { EstadoPedido, EstadoCobro, Editado } from '../components/MercUI';
+import { Tarjeta, Cargando, Toast } from '../components/ui';
+import { EstadoCobro, Editado } from '../components/MercUI';
+import EstadoPedidoEditable from '../components/MercEstadoEditable';
 import MercFiltros, { FILTROS_VACIOS, queryDeFiltros } from '../components/MercFiltros';
-import { esMarca, pesos, numeroPedido, fechaCorta } from '../utils/mercaderia';
+import { esMarca, pesos, textoSaldo, numeroPedido, fechaCorta } from '../utils/mercaderia';
 
 function IconoOjo() {
   return (
@@ -26,6 +27,8 @@ export default function MercHistorial() {
   const [sucursales, setSucursales] = useState([]);
   const [responsables, setResponsables] = useState([]);
   const [error, setError] = useState('');
+  const [version, setVersion] = useState(0); // se sube al cambiar un estado, para recargar el listado
+  const [toast, setToast] = useState('');
 
   useEffect(() => {
     if (!marca) return;
@@ -36,7 +39,7 @@ export default function MercHistorial() {
   useEffect(() => {
     setError('');
     api.get('/api/merc/pedidos' + queryDeFiltros(filtros)).then(setPedidos).catch((e) => { setError(e.message); setPedidos([]); });
-  }, [filtros]);
+  }, [filtros, version]);
 
   return (
     <div className="space-y-4">
@@ -57,12 +60,12 @@ export default function MercHistorial() {
                     <p className="text-sm font-semibold text-gray-900">{numeroPedido(p.id)} · {p.sucursal_nombre} {p.editado && <Editado />}</p>
                     <p className="text-xs text-gray-400">{p.responsable_nombre} · {fechaCorta(p.creado_en)}</p>
                   </div>
-                  <EstadoPedido estado={p.estado} />
+                  <EstadoPedidoEditable pedido={p} editable={marca} onCambiado={(m) => { setToast(m); setVersion((v) => v + 1); }} />
                 </div>
                 <div className="flex items-end justify-between gap-2 mt-2">
                   <div className="text-sm">
                     <p className="text-gray-700">Total <strong>{pesos(p.total)}</strong></p>
-                    <p className={p.saldo > 0 ? 'text-fat-bordo-600' : 'text-gray-400'}>Saldo {pesos(p.saldo)}</p>
+                    <p className={p.saldo > 0 ? 'text-fat-bordo-600' : 'text-gray-400'}>Saldo {textoSaldo(p)}</p>
                   </div>
                   <div className="flex items-center gap-2">
                     <EstadoCobro estado={p.estado_cobro} />
@@ -92,8 +95,8 @@ export default function MercHistorial() {
                     <td className="px-2 xl:px-3 py-2 text-gray-700">{p.responsable_nombre}</td>
                     <td className="px-2 xl:px-3 py-2 text-gray-500">{fechaCorta(p.creado_en)}</td>
                     <td className="px-2 xl:px-3 py-2 text-right text-gray-900">{pesos(p.total)}</td>
-                    <td className={`px-3 py-2 text-right ${p.saldo > 0 ? 'text-fat-bordo-600 font-medium' : 'text-gray-400'}`}>{pesos(p.saldo)}</td>
-                    <td className="px-2 xl:px-3 py-2"><EstadoPedido estado={p.estado} /></td>
+                    <td className={`px-3 py-2 text-right ${p.saldo > 0 ? 'text-fat-bordo-600 font-medium' : 'text-gray-400'}`}>{textoSaldo(p)}</td>
+                    <td className="px-2 xl:px-3 py-2"><EstadoPedidoEditable pedido={p} editable={marca} onCambiado={(m) => { setToast(m); setVersion((v) => v + 1); }} /></td>
                     <td className="px-2 xl:px-3 py-2"><EstadoCobro estado={p.estado_cobro} /></td>
                     <td className="px-2 xl:px-3 py-2 text-right">
                       <Link to={`/mercaderia/pedidos/${p.id}`} aria-label="Ver detalle" title="Ver detalle" className="inline-block p-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50"><IconoOjo /></Link>
@@ -105,6 +108,7 @@ export default function MercHistorial() {
           </Tarjeta>
         </>
       )}
+      {toast && <Toast mensaje={toast} onCerrar={() => setToast('')} />}
     </div>
   );
 }

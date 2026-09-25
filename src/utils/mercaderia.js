@@ -8,7 +8,7 @@ export const ETIQUETA_ESTADO = {
   RETIRADO: 'Retirado',
   CANCELADO: 'Cancelado',
 };
-export const ETIQUETA_COBRO = { PENDIENTE_COBRO: 'Pendiente de cobro', ABONADO: 'Abonado', NO_APLICA: 'Sin cobro' };
+export const ETIQUETA_COBRO = { PENDIENTE_COBRO: 'Pendiente de cobro', ABONADO: 'Abonado', NO_APLICA: 'Sin deuda' };
 
 export const esMarca = (usuario) => usuario?.personal_marca === true;
 export const puedeUsarMercaderia = (usuario) => usuario?.rol === 'GERENTE' || esMarca(usuario);
@@ -26,6 +26,11 @@ export function fechaCorta(valor) {
 export function fechaHora(valor) {
   const d = new Date(valor);
   return `${fechaCorta(d)} – ${d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false })}`;
+}
+
+// El saldo pendiente solo existe desde el retiro: antes se muestra un guion.
+export function textoSaldo(pedido) {
+  return pedido.estado === 'RETIRADO' ? pesos(pedido.saldo) : '—';
 }
 
 export function textoDemora(dias) {
