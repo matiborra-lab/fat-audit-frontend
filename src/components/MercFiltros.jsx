@@ -17,7 +17,7 @@ const OPCIONES_COBRO = { PENDIENTE_COBRO: 'Pendiente de cobro', ABONADO: 'Abonad
 // los desplegables de al lado (con la etiqueta arriba quedaba desalineado).
 function CampoFecha({ etiqueta, valor, onChange }) {
   return (
-    <label className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 focus-within:ring-2 focus-within:ring-fat-bordo-400">
+    <label className="col-span-2 md:col-span-1 flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 focus-within:ring-2 focus-within:ring-fat-bordo-400">
       <span className="text-gray-400 shrink-0">{etiqueta}</span>
       <input type="date" value={valor} onChange={onChange} className="min-w-0 flex-1 bg-transparent text-gray-900 focus:outline-none" />
     </label>
@@ -30,7 +30,7 @@ function CampoFecha({ etiqueta, valor, onChange }) {
 export default function MercFiltros({ filtros, onChange, marca, sucursales = [], responsables = [] }) {
   const set = (campo) => (e) => onChange({ ...filtros, [campo]: e.target.value });
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2 items-center">
+    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2 items-center [&_select]:text-sm [&_select]:px-2 md:[&_select]:text-base md:[&_select]:px-3">
       {marca && (
         <Select value={filtros.sucursal_id} onChange={set('sucursal_id')} aria-label="Sucursal">
           <option value="">Todas las sucursales</option>
@@ -47,7 +47,7 @@ export default function MercFiltros({ filtros, onChange, marca, sucursales = [],
       </Select>
       {marca && (
         <Select value={filtros.usuario_id} onChange={set('usuario_id')} aria-label="Responsable">
-          <option value="">Todos los responsables</option>
+          <option value="">Responsables</option>
           {responsables.map((r) => <option key={r.id} value={r.id}>{r.nombre}</option>)}
         </Select>
       )}

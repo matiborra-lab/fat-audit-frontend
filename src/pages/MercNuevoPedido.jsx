@@ -113,7 +113,7 @@ export default function MercNuevoPedido() {
           <div key={p.id} className="space-y-3">
           {/* Encabezado de categoría cuando cambia (el orden viene del catálogo). */}
           {(i === 0 || filtrados[i - 1].categoria_id !== p.categoria_id) && (p.categoria_nombre || filtrados.some((x) => x.categoria_id)) && (
-            <h2 className="text-sm font-semibold text-gray-500 uppercase pt-1">{p.categoria_nombre || 'Otros productos'}</h2>
+            <h2 className="mt-3 first:mt-0 rounded-lg bg-fat-bordo-500 px-3 py-2 text-sm font-semibold uppercase tracking-wide text-white">{p.categoria_nombre || 'Otros productos'}</h2>
           )}
           <Tarjeta className="p-3">
             <div className="flex gap-3">
