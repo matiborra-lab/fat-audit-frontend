@@ -109,3 +109,26 @@ export const api = {
   patch: (ruta, body, opciones) => pedido('PATCH', ruta, body, opciones),
   del: (ruta, body, opciones) => pedido('DELETE', ruta, body, opciones),
 };
+
+// Descarga un PDF que arma la API (requiere el token, por eso no alcanza con
+// un link directo): lo baja como blob y dispara la descarga en el navegador.
+export async function descargarPdf(ruta, nombreArchivo) {
+  let resp;
+  try {
+    resp = await fetch(API_URL + ruta, { headers: { Authorization: 'Bearer ' + obtenerToken() } });
+  } catch (err) {
+    throw new Error('No se pudo conectar con el servidor. Revisá tu conexión e intentá de nuevo.');
+  }
+  if (!resp.ok) {
+    const data = await resp.json().catch(() => null);
+    throw new Error(data?.error || 'No se pudo generar el PDF');
+  }
+  const url = URL.createObjectURL(await resp.blob());
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = nombreArchivo;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}

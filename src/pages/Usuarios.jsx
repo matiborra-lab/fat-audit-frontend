@@ -27,7 +27,7 @@ export default function Usuarios() {
   const [modalAbierto, setModalAbierto] = useState(false);
   const [editando, setEditando] = useState(null);
   const [toast, setToast] = useState('');
-  const [form, setForm] = useState({ email: '', usuario: '', nombre: '', apellido: '', rol: esGerente ? 'COLABORADOR' : 'AUDITOR', sucursal_id: '', puesto: '', fecha_nacimiento: '' });
+  const [form, setForm] = useState({ email: '', usuario: '', nombre: '', apellido: '', rol: esGerente ? 'COLABORADOR' : 'AUDITOR', sucursal_id: '', puesto: '', fecha_nacimiento: '', personal_marca: false });
   const [formEdit, setFormEdit] = useState(null);
   const [error, setError] = useState('');
   const [guardando, setGuardando] = useState(false);
@@ -54,12 +54,12 @@ export default function Usuarios() {
     setGuardando(true);
     try {
       const body = { ...form };
-      if (esGerente) { body.rol = 'COLABORADOR'; delete body.sucursal_id; }
+      if (esGerente) { body.rol = 'COLABORADOR'; delete body.sucursal_id; delete body.personal_marca; }
       else { body.sucursal_id = (form.rol === 'GERENTE' || form.rol === 'COLABORADOR') ? Number(form.sucursal_id) : null; }
       if (body.rol !== 'COLABORADOR') delete body.puesto;
       const creado = await api.post('/api/admin/usuarios', body);
       setModalAbierto(false);
-      setForm({ email: '', usuario: '', nombre: '', apellido: '', rol: esGerente ? 'COLABORADOR' : 'AUDITOR', sucursal_id: '', puesto: '', fecha_nacimiento: '' });
+      setForm({ email: '', usuario: '', nombre: '', apellido: '', rol: esGerente ? 'COLABORADOR' : 'AUDITOR', sucursal_id: '', puesto: '', fecha_nacimiento: '', personal_marca: false });
       // El backend crea el usuario igual aunque el mail de invitación falle
       // (ver advertencia) - antes acá se mostraba siempre "invitado por
       // mail" sin chequear eso, ocultando el fallo de envío.
@@ -87,6 +87,7 @@ export default function Usuarios() {
         if (editando.rol === 'COLABORADOR') { body.puesto = formEdit.puesto; body.fecha_nacimiento = formEdit.fecha_nacimiento || null; }
       } else {
         body.rol = formEdit.rol;
+        body.personal_marca = !!formEdit.personal_marca;
         body.sucursal_id = (formEdit.rol === 'GERENTE' || formEdit.rol === 'COLABORADOR') ? Number(formEdit.sucursal_id) : null;
         if (formEdit.rol === 'COLABORADOR') body.puesto = formEdit.puesto;
         if (formEdit.rol === 'GERENTE' || formEdit.rol === 'COLABORADOR') body.fecha_nacimiento = formEdit.fecha_nacimiento || null;
@@ -124,7 +125,7 @@ export default function Usuarios() {
   function abrirEdicion(u) {
     setError('');
     setConfirmandoReset(false);
-    setFormEdit({ email: u.email || '', nombre: u.nombre || '', apellido: u.apellido || '', usuario: u.usuario || '', puesto: u.puesto || '', rol: u.rol, sucursal_id: u.sucursal_id || '', fecha_nacimiento: u.fecha_nacimiento || '' });
+    setFormEdit({ email: u.email || '', nombre: u.nombre || '', apellido: u.apellido || '', usuario: u.usuario || '', puesto: u.puesto || '', rol: u.rol, sucursal_id: u.sucursal_id || '', fecha_nacimiento: u.fecha_nacimiento || '', personal_marca: !!u.personal_marca });
     setEditando(u);
   }
 
@@ -164,7 +165,7 @@ export default function Usuarios() {
               <button className="min-w-0 text-left" onClick={() => abrirEdicion(u)}>
                 <p className="text-sm font-medium text-gray-900 truncate">{nombreCompleto(u)}</p>
                 <p className="text-xs text-gray-400 truncate">
-                  {u.usuario ? `@${u.usuario} · ` : ''}{u.email} · {ROL_LABEL[u.rol]}{u.puesto ? ` · ${PUESTO_LABEL[u.puesto]}` : ''}{u.sucursal_nombre ? ` · ${u.sucursal_nombre}` : ''}
+                  {u.usuario ? `@${u.usuario} · ` : ''}{u.email} · {ROL_LABEL[u.rol]}{u.personal_marca ? ' · Personal de Marca' : ''}{u.puesto ? ` · ${PUESTO_LABEL[u.puesto]}` : ''}{u.sucursal_nombre ? ` · ${u.sucursal_nombre}` : ''}
                   {!u.clave_definida && ' · invitación pendiente'}
                 </p>
                 <p className="text-xs text-gray-300 truncate">Última actividad: {formatearFecha(u.ultima_actividad_en)}</p>
@@ -245,6 +246,15 @@ export default function Usuarios() {
             {(esGerente || form.rol === 'GERENTE' || form.rol === 'COLABORADOR') && (
               <Campo label="Fecha de nacimiento (opcional)" type="date" value={form.fecha_nacimiento} onChange={(e) => setForm({ ...form, fecha_nacimiento: e.target.value })} />
             )}
+            {yo.rol === 'ADMIN' && (
+              <label className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 px-3 py-2">
+                <span>
+                  <span className="block text-sm font-medium text-gray-700">Personal de Marca</span>
+                  <span className="block text-xs text-gray-400">Gestiona pedidos, cobros y catálogo de Mercadería FAT</span>
+                </span>
+                <input type="checkbox" checked={form.personal_marca} onChange={(e) => setForm({ ...form, personal_marca: e.target.checked })} />
+              </label>
+            )}
             {error && <p className="text-sm text-fat-bordo-600">{error}</p>}
             <Boton type="submit" cargando={guardando}>Invitar</Boton>
           </form>
@@ -279,6 +289,15 @@ export default function Usuarios() {
             )}
             {(formEdit.rol === 'GERENTE' || formEdit.rol === 'COLABORADOR') && (
               <Campo label="Fecha de nacimiento (opcional)" type="date" value={formEdit.fecha_nacimiento} onChange={(e) => setFormEdit({ ...formEdit, fecha_nacimiento: e.target.value })} />
+            )}
+            {yo.rol === 'ADMIN' && (
+              <label className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 px-3 py-2">
+                <span>
+                  <span className="block text-sm font-medium text-gray-700">Personal de Marca</span>
+                  <span className="block text-xs text-gray-400">Gestiona pedidos, cobros y catálogo de Mercadería FAT</span>
+                </span>
+                <input type="checkbox" checked={formEdit.personal_marca} onChange={(e) => setFormEdit({ ...formEdit, personal_marca: e.target.checked })} />
+              </label>
             )}
             <p className="text-xs text-gray-400">Última actividad: {formatearFecha(editando.ultima_actividad_en)}</p>
             {error && <p className="text-sm text-fat-bordo-600">{error}</p>}

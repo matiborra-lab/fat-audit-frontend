@@ -5,6 +5,7 @@ import { api } from '../api/client';
 import { soportaPush, suscripcionActual, activarPush, desactivarPush } from '../utils/push';
 import InstalarApp from './InstalarApp';
 import { OnboardingProvider } from './Onboarding';
+import { esMarca, puedeUsarMercaderia } from '../utils/mercaderia';
 
 // Misma apariencia en la barra lateral de escritorio y en el panel de
 // celular - ambas son listas verticales, a diferencia del viejo menú
@@ -18,7 +19,25 @@ const linkClassSidebar = ({ isActive }) =>
 // diario, con Historial dentro del desplegable de Auditorías, antes de
 // Reportes), Dashboard cerca del final (ya no es la pantalla de entrada) y
 // Configuración siempre último.
-function itemsDeNav(rol) {
+// Mercadería FAT (pedidos de las sucursales a la marca): un Gerente ve Nuevo
+// pedido e Historial; Personal de Marca suma Gestión de pagos y Catálogo. Va
+// siempre justo antes de Centro de ayuda.
+function itemMercaderia(usuario) {
+  if (!puedeUsarMercaderia(usuario)) return null;
+  const children = [
+    { to: '/mercaderia/nuevo', label: 'Nuevo pedido' },
+    { to: '/mercaderia/historial', label: 'Historial' },
+  ];
+  if (esMarca(usuario)) {
+    children.push({ to: '/mercaderia/pagos', label: 'Gestión de pagos' });
+    children.push({ to: '/mercaderia/catalogo', label: 'Catálogo' });
+  }
+  return { label: 'Mercadería FAT', children };
+}
+
+function itemsDeNav(usuario) {
+  const rol = usuario.rol;
+  const mercaderia = itemMercaderia(usuario);
   // Un Colaborador solo ve su calendario, sus tareas y el dashboard de su
   // propia sucursal - nada de historial ni gestión - pero sí sus
   // preferencias de notificación (personales, no requieren permisos de
@@ -29,6 +48,7 @@ function itemsDeNav(rol) {
       { to: '/tareas', label: 'Tareas' },
       { to: '/dashboard', label: 'Dashboard' },
       { label: 'Configuración', children: [{ to: '/configuracion/notificaciones', label: 'Notificaciones' }] },
+      ...(mercaderia ? [mercaderia] : []),
       { to: '/ayuda', label: 'Centro de ayuda' },
     ];
   }
@@ -71,6 +91,7 @@ function itemsDeNav(rol) {
   }
   hijosConfig.push({ to: '/configuracion/notificaciones', label: 'Notificaciones' });
   items.push({ label: 'Configuración', children: hijosConfig });
+  if (mercaderia) items.push(mercaderia);
   items.push({ to: '/ayuda', label: 'Centro de ayuda' });
   return items;
 }
@@ -106,7 +127,10 @@ function CampanaNotificaciones({ abrirHaciaArriba = false }) {
   async function marcarLeida(n) {
     if (!n.leida_en) await api.post(`/api/notificaciones/${n.id}/leida`);
     recargar();
-    if (n.tipo === 'COMUNICADO' && !n.payload_json?.solo_push) {
+    if (n.tipo === 'PEDIDO_MERCADERIA' && n.payload_json?.url) {
+      setAbierto(false);
+      navigate(n.payload_json.url);
+    } else if (n.tipo === 'COMUNICADO' && !n.payload_json?.solo_push) {
       setAbierto(false);
       navigate(`/comunicados/${n.id}`);
     }
@@ -266,7 +290,7 @@ export default function Layout() {
   const { usuario, logout } = useAuth();
   const location = useLocation();
   const [menuAbierto, setMenuAbierto] = useState(false);
-  const items = itemsDeNav(usuario.rol);
+  const items = itemsDeNav(usuario);
   const [gruposAbiertos, setGruposAbiertos] = useState(() => {
     // Auto-expandir el grupo cuyo hijo coincide con la ruta actual al montar.
     const grupo = items.find((it) => it.children?.some((c) => location.pathname.startsWith(c.to)));

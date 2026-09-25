@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/client';
+import { useAuth } from '../context/AuthContext';
+import { esMarca } from '../utils/mercaderia';
 import { Tarjeta, Boton, Modal, Select, Campo, Toast, Cargando } from '../components/ui';
 
 // Mismas opciones de anticipación para cualquier tipo con RECORDATORIO_* -
@@ -45,6 +47,7 @@ const TIPOS_SIMPLES = [
 ];
 
 export default function NotificacionPreferencias() {
+  const { usuario } = useAuth();
   const [prefs, setPrefs] = useState(null); // { [tipo]: { habilitado, anticipacion_horas } }
   const [reglasClima, setReglasClima] = useState([]);
   const [modalRegla, setModalRegla] = useState(false);
@@ -124,6 +127,19 @@ export default function NotificacionPreferencias() {
           </Tarjeta>
         );
       })}
+
+      {/* Solo Personal de Marca recibe pedidos nuevos de Mercadería FAT. Activada por default; apagarla no frena el registro del pedido, solo el aviso. */}
+      {esMarca(usuario) && (
+        <Tarjeta className="p-4">
+          <label className="flex items-center justify-between gap-3 text-sm">
+            <div>
+              <p className="font-medium text-gray-900">Nuevos pedidos de mercadería</p>
+              <p className="text-xs text-gray-400">Aviso (campana y push) cuando una sucursal confirma un pedido en Mercadería FAT</p>
+            </div>
+            <input type="checkbox" checked={pref('NUEVOS_PEDIDOS_MERCADERIA').habilitado} onChange={(e) => actualizar('NUEVOS_PEDIDOS_MERCADERIA', { habilitado: e.target.checked })} />
+          </label>
+        </Tarjeta>
+      )}
 
       {TIPOS_SIMPLES.map((t) => {
         const p = pref(t.tipo);

@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
-import { RequireAuth, RequireRole } from './components/ProtectedRoute';
+import { RequireAuth, RequireRole, RequireMercaderia } from './components/ProtectedRoute';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import OlvideClave from './pages/OlvideClave';
@@ -21,6 +21,11 @@ import ReportesProgramados from './pages/ReportesProgramados';
 import CentroAyuda from './pages/CentroAyuda';
 import Comunicados from './pages/Comunicados';
 import ComunicadoDetalle from './pages/ComunicadoDetalle';
+import MercNuevoPedido from './pages/MercNuevoPedido';
+import MercHistorial from './pages/MercHistorial';
+import MercPedidoDetalle from './pages/MercPedidoDetalle';
+import MercPagos from './pages/MercPagos';
+import MercCatalogo from './pages/MercCatalogo';
 
 export default function App() {
   return (
@@ -66,6 +71,18 @@ export default function App() {
 
               <Route element={<RequireRole roles={['ADMIN']} />}>
                 <Route path="/comunicados" element={<Comunicados />} />
+              </Route>
+
+              {/* Mercadería FAT: Gerente y Personal de Marca; pagos y catálogo,
+                  solo Personal de Marca (el backend lo valida igual). */}
+              <Route element={<RequireMercaderia />}>
+                <Route path="/mercaderia/nuevo" element={<MercNuevoPedido />} />
+                <Route path="/mercaderia/historial" element={<MercHistorial />} />
+                <Route path="/mercaderia/pedidos/:id" element={<MercPedidoDetalle />} />
+              </Route>
+              <Route element={<RequireMercaderia soloMarca />}>
+                <Route path="/mercaderia/pagos" element={<MercPagos />} />
+                <Route path="/mercaderia/catalogo" element={<MercCatalogo />} />
               </Route>
 
               <Route element={<RequireRole roles={['ADMIN', 'AUDITOR', 'GERENTE']} />}>
