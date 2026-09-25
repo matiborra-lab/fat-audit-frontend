@@ -1,5 +1,5 @@
 import { Select } from './ui';
-import { ESTADOS_PEDIDO, ETIQUETA_ESTADO, ETIQUETA_COBRO } from '../utils/mercaderia';
+import { ESTADOS_PEDIDO, ETIQUETA_ESTADO } from '../utils/mercaderia';
 
 export const FILTROS_VACIOS = { sucursal_id: '', estado: '', cobro: '', usuario_id: '', desde: '', hasta: '' };
 
@@ -11,13 +11,26 @@ export function queryDeFiltros(filtros, extra = {}) {
   return q ? '?' + q : '';
 }
 
+const OPCIONES_COBRO = { PENDIENTE_COBRO: 'Pendiente de cobro', ABONADO: 'Abonado' };
+
+// Campo de fecha con la etiqueta adentro, para que mida y alinee igual que
+// los desplegables de al lado (con la etiqueta arriba quedaba desalineado).
+function CampoFecha({ etiqueta, valor, onChange }) {
+  return (
+    <label className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 focus-within:ring-2 focus-within:ring-fat-bordo-400">
+      <span className="text-gray-400 shrink-0">{etiqueta}</span>
+      <input type="date" value={valor} onChange={onChange} className="min-w-0 flex-1 bg-transparent text-gray-900 focus:outline-none" />
+    </label>
+  );
+}
+
 // Filtros del historial y de Gestión de pagos. Personal de Marca ve además
 // sucursal y responsable; un Gerente solo su sucursal, así que no se los
 // ofrece (el backend igual lo fuerza).
 export default function MercFiltros({ filtros, onChange, marca, sucursales = [], responsables = [] }) {
   const set = (campo) => (e) => onChange({ ...filtros, [campo]: e.target.value });
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2">
+    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2 items-center">
       {marca && (
         <Select value={filtros.sucursal_id} onChange={set('sucursal_id')} aria-label="Sucursal">
           <option value="">Todas las sucursales</option>
@@ -30,7 +43,7 @@ export default function MercFiltros({ filtros, onChange, marca, sucursales = [],
       </Select>
       <Select value={filtros.cobro} onChange={set('cobro')} aria-label="Estado de cobro">
         <option value="">Todo el cobro</option>
-        {Object.entries(ETIQUETA_COBRO).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+        {Object.entries(OPCIONES_COBRO).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
       </Select>
       {marca && (
         <Select value={filtros.usuario_id} onChange={set('usuario_id')} aria-label="Responsable">
@@ -38,12 +51,8 @@ export default function MercFiltros({ filtros, onChange, marca, sucursales = [],
           {responsables.map((r) => <option key={r.id} value={r.id}>{r.nombre}</option>)}
         </Select>
       )}
-      <label className="text-[11px] text-gray-400">Desde
-        <input type="date" value={filtros.desde} onChange={set('desde')} className="w-full rounded-lg border border-gray-300 px-2 py-2 text-sm text-gray-900 bg-white" />
-      </label>
-      <label className="text-[11px] text-gray-400">Hasta
-        <input type="date" value={filtros.hasta} onChange={set('hasta')} className="w-full rounded-lg border border-gray-300 px-2 py-2 text-sm text-gray-900 bg-white" />
-      </label>
+      <CampoFecha etiqueta="Desde" valor={filtros.desde} onChange={set('desde')} />
+      <CampoFecha etiqueta="Hasta" valor={filtros.hasta} onChange={set('hasta')} />
     </div>
   );
 }

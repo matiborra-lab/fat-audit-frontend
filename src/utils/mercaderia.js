@@ -1,13 +1,14 @@
 // Helpers compartidos del módulo Mercadería FAT.
 
-export const ESTADOS_PEDIDO = ['PENDIENTE_CONFIRMAR', 'CONFIRMADO', 'LISTO_RETIRAR', 'RETIRADO'];
+export const ESTADOS_PEDIDO = ['PENDIENTE_CONFIRMAR', 'CONFIRMADO', 'LISTO_RETIRAR', 'RETIRADO', 'CANCELADO'];
 export const ETIQUETA_ESTADO = {
   PENDIENTE_CONFIRMAR: 'Pendiente de confirmar',
   CONFIRMADO: 'Confirmado',
   LISTO_RETIRAR: 'Listo para retirar',
   RETIRADO: 'Retirado',
+  CANCELADO: 'Cancelado',
 };
-export const ETIQUETA_COBRO = { PENDIENTE_COBRO: 'Pendiente de cobro', ABONADO: 'Abonado' };
+export const ETIQUETA_COBRO = { PENDIENTE_COBRO: 'Pendiente de cobro', ABONADO: 'Abonado', NO_APLICA: 'Sin cobro' };
 
 export const esMarca = (usuario) => usuario?.personal_marca === true;
 export const puedeUsarMercaderia = (usuario) => usuario?.rol === 'GERENTE' || esMarca(usuario);

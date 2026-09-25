@@ -3,23 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { Tarjeta, Boton, Modal, Select, Cargando, Leyenda } from '../components/ui';
-import { FotoProducto } from '../components/MercUI';
+import { FotoProducto, Cantidad } from '../components/MercUI';
 import { esMarca, pesos } from '../utils/mercaderia';
-
-// Selector de cantidad: - [n] +
-function Cantidad({ valor, onChange, min = 1 }) {
-  return (
-    <div className="inline-flex items-center rounded-lg border border-gray-300 bg-white">
-      <button type="button" onClick={() => onChange(Math.max(min, valor - 1))} className="w-9 h-9 text-lg text-gray-600 active:bg-gray-100" aria-label="Menos">−</button>
-      <input
-        type="number" inputMode="numeric" min={min} value={valor}
-        onChange={(e) => onChange(Math.max(min, Math.min(9999, Math.floor(Number(e.target.value)) || min)))}
-        className="w-12 h-9 text-center text-sm text-gray-900 border-x border-gray-200 focus:outline-none"
-      />
-      <button type="button" onClick={() => onChange(Math.min(9999, valor + 1))} className="w-9 h-9 text-lg text-gray-600 active:bg-gray-100" aria-label="Más">+</button>
-    </div>
-  );
-}
 
 // Mercadería FAT > Nuevo pedido. Pensado para el celular: catálogo en
 // tarjetas grandes, una barra fija abajo con el total y la revisión del
@@ -124,8 +109,13 @@ export default function MercNuevoPedido() {
 
       {productos.length === 0 && <Leyenda>Todavía no hay productos disponibles en el catálogo.</Leyenda>}
       <div className="space-y-3">
-        {filtrados.map((p) => (
-          <Tarjeta key={p.id} className="p-3">
+        {filtrados.map((p, i) => (
+          <div key={p.id} className="space-y-3">
+          {/* Encabezado de categoría cuando cambia (el orden viene del catálogo). */}
+          {(i === 0 || filtrados[i - 1].categoria_id !== p.categoria_id) && (p.categoria_nombre || filtrados.some((x) => x.categoria_id)) && (
+            <h2 className="text-sm font-semibold text-gray-500 uppercase pt-1">{p.categoria_nombre || 'Otros productos'}</h2>
+          )}
+          <Tarjeta className="p-3">
             <div className="flex gap-3">
               <FotoProducto url={p.imagen_url} tamano="w-20 h-20" />
               <div className="min-w-0 flex-1">
@@ -142,6 +132,7 @@ export default function MercNuevoPedido() {
               </div>
             </div>
           </Tarjeta>
+          </div>
         ))}
         {productos.length > 0 && filtrados.length === 0 && <p className="text-sm text-gray-400">No hay productos que coincidan con la búsqueda.</p>}
       </div>

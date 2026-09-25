@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, descargarPdf } from '../api/client';
 import { Tarjeta, Boton, Modal, Select, Toast, Cargando } from '../components/ui';
-import { EstadoPedido } from '../components/MercUI';
+import { EstadoPedido, Editado } from '../components/MercUI';
 import MercFiltros, { FILTROS_VACIOS, queryDeFiltros } from '../components/MercFiltros';
 import { pesos, numeroPedido, fechaCorta, textoDemora } from '../utils/mercaderia';
 
@@ -72,7 +72,7 @@ export default function MercPagos() {
                 <Tarjeta className="p-3">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="text-sm font-semibold text-gray-900">{numeroPedido(p.id)} · {p.sucursal_nombre}</p>
+                      <p className="text-sm font-semibold text-gray-900">{numeroPedido(p.id)} · {p.sucursal_nombre} {p.editado && <Editado />}</p>
                       <p className="text-xs text-gray-400">{p.responsable_nombre} · {fechaCorta(p.creado_en)}</p>
                     </div>
                     <EstadoPedido estado={p.estado} />
@@ -102,7 +102,7 @@ export default function MercPagos() {
               <tbody className="divide-y divide-gray-100">
                 {pedidos.map((p) => (
                   <tr key={p.id} className="hover:bg-gray-50">
-                    <td className="px-2 xl:px-3 py-2 font-medium"><Link to={`/mercaderia/pedidos/${p.id}`} className="text-fat-bordo-600 hover:underline">{numeroPedido(p.id)}</Link></td>
+                    <td className="px-2 xl:px-3 py-2 font-medium"><Link to={`/mercaderia/pedidos/${p.id}`} className="text-fat-bordo-600 hover:underline">{numeroPedido(p.id)}</Link> {p.editado && <Editado />}</td>
                     <td className="px-2 xl:px-3 py-2 text-gray-700">{p.sucursal_nombre}</td>
                     <td className="px-2 xl:px-3 py-2 text-gray-500">{fechaCorta(p.creado_en)}</td>
                     <td className="px-2 xl:px-3 py-2 text-gray-700">{p.responsable_nombre}</td>
