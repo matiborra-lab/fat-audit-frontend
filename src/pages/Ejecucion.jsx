@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api, subirArchivo, verificarFotoIA } from '../api/client';
 import { Boton, Cargando, EtiquetaArea } from '../components/ui';
@@ -199,6 +199,17 @@ export default function Ejecucion() {
     guardarRespuesta(itemId, { ...respuestas[itemId], ...cambios });
   }
 
+  // Un ítem CHECKBOX ("Verificado") que además exige foto queda atado a su
+  // evidencia: si la foto se subió con éxito (o, en un ítem con IA, la
+  // aprobó) antes de tildar el casillero a mano, se tilda solo - no tiene
+  // sentido pedirle al auditor un segundo toque. Ver también RespuestaControl,
+  // que hace el camino inverso (tocar el casillero sin foto abre la cámara).
+  function marcarVerificadoSiCorresponde(item) {
+    if (item.tipo_respuesta === 'CHECKBOX' && (item.evidencia_requerida === 'FOTO' || item.evidencia_requerida === 'FOTO_O_VIDEO')) {
+      responder(item.id, true);
+    }
+  }
+
   async function subirEvidencia(item, file) {
     setSubiendo(item.id);
     try {
@@ -221,6 +232,7 @@ export default function Ejecucion() {
 
       const evidencia = await api.post(`/api/runs/${id}/evidencia`, { item_id: item.id, tipo, url: publicUrl, thumbnail_url: thumbnailUrl });
       setEvidencias((prev) => ({ ...prev, [item.id]: [...(prev[item.id] || []), evidencia] }));
+      marcarVerificadoSiCorresponde(item);
       return evidencia;
     } catch (err) {
       setError('No se pudo subir la evidencia: ' + err.message);
@@ -264,6 +276,7 @@ export default function Ejecucion() {
       }
       if (resultado.aprobado) {
         setEvidencias((prev) => ({ ...prev, [item.id]: [...(prev[item.id] || []), resultado.evidencia] }));
+        marcarVerificadoSiCorresponde(item);
         limpiarEstadoIA(item.id);
         return resultado.evidencia;
       }
@@ -436,6 +449,12 @@ function ItemCard({ item, areaNombre, respuesta, evidencias, subiendo, estadoIA,
   const faltaVideo = requiereVideo && videos.length === 0;
   const faltaFotoOVideo = requiereFotoOVideo && fotos.length === 0 && videos.length === 0;
   const faltaComentario = acciones?.comentario_obligatorio && !respuesta.comentario;
+  // El casillero "Verificado" (tipo CHECKBOX) de un ítem que además exige
+  // foto queda atado a la cámara: tocarlo sin tener todavía una foto abre la
+  // cámara en vez de tildarse solo (ver RespuestaControl) - el camino
+  // inverso (foto exitosa tilda el casillero) está en marcarVerificadoSiCorresponde.
+  const requiereFotoParaVerificar = item.tipo_respuesta === 'CHECKBOX' && (item.evidencia_requerida === 'FOTO' || item.evidencia_requerida === 'FOTO_O_VIDEO');
+  const fotoRef = useRef(null);
 
   // Se puede sacar una evidencia solo si no es la única que cumple un
   // requisito obligatorio - si no, hay que "reemplazarla" en vez de borrarla
@@ -469,9 +488,17 @@ function ItemCard({ item, areaNombre, respuesta, evidencias, subiendo, estadoIA,
         )}
       </div>
       {item.ayuda_texto && <p className="text-xs text-gray-400">{item.ayuda_texto}</p>}
-      {item.verificacion_ia && item.criterio_ia && <p className="text-xs text-fat-bordo-400">📷 IA verifica: {item.criterio_ia}</p>}
 
-      {!respuesta.no_aplica && <RespuestaControl item={item} valor={respuesta.valor_json} onResponder={onResponder} />}
+      {!respuesta.no_aplica && (
+        <RespuestaControl
+          item={item}
+          valor={respuesta.valor_json}
+          onResponder={onResponder}
+          requiereFotoParaVerificar={requiereFotoParaVerificar}
+          tieneFoto={fotos.length > 0}
+          onAbrirCamara={() => fotoRef.current?.click()}
+        />
+      )}
 
       {!respuesta.no_aplica && (
         <>
@@ -488,18 +515,18 @@ function ItemCard({ item, areaNombre, respuesta, evidencias, subiendo, estadoIA,
                 del comentario, exija o no evidencia el ítem - si una regla
                 la vuelve obligatoria, este mismo botón pasa a resaltarse en
                 vez de agregar uno nuevo (una foto ya cargada alcanza). */}
-            <BotonEvidencia label="" accept="image/*" capture="environment" onArchivo={onArchivo} resaltado={faltaFoto || faltaFotoOVideo} disabled={subiendo} icono />
+            <BotonEvidencia ref={fotoRef} label="" accept="image/*" capture="environment" onArchivo={onArchivo} resaltado={faltaFoto || faltaFotoOVideo} disabled={subiendo} icono />
           </div>
 
           {estadoIA?.analizando && (
             <p className="text-xs text-fat-bordo-600 flex items-center gap-1.5">
               <span className="inline-block w-3 h-3 rounded-full border-2 border-fat-bordo-200 border-t-fat-bordo-600 animate-spin" />
-              Analizando la foto con IA…
+              Fatricio está analizando tu foto
             </p>
           )}
           {estadoIA?.rechazada && (
             <div className="text-xs bg-fat-bordo-50 text-fat-bordo-700 rounded-lg px-3 py-2 space-y-1">
-              <p>La IA no encontró cumplida la tarea: {estadoIA.razon}</p>
+              <p>Fatricio no aprobó la foto: {estadoIA.razon}</p>
               <p className="text-fat-bordo-400">Sacá la foto de nuevo (intento {estadoIA.intentos}).</p>
               {estadoIA.intentos >= INTENTOS_PARA_FORZAR_IA && (
                 <button type="button" className="underline font-medium" onClick={() => onForzarIA(estadoIA.archivo)}>
@@ -560,8 +587,12 @@ function MiniaturaEvidencia({ evidencia, puedeQuitar, onQuitar, onReemplazar }) 
   );
 }
 
-function BotonEvidencia({ label, accept, capture, onArchivo, resaltado, disabled, icono }) {
+// forwardRef: el casillero "Verificado" de RespuestaControl necesita poder
+// abrir esta misma cámara desde afuera (ver requiereFotoParaVerificar en
+// ItemCard), no solo el propio botón 📷.
+const BotonEvidencia = forwardRef(function BotonEvidencia({ label, accept, capture, onArchivo, resaltado, disabled, icono }, refExterno) {
   const ref = useRef(null);
+  useImperativeHandle(refExterno, () => ({ click: () => ref.current?.click() }));
   return (
     <>
       <button
@@ -583,9 +614,9 @@ function BotonEvidencia({ label, accept, capture, onArchivo, resaltado, disabled
       />
     </>
   );
-}
+});
 
-function RespuestaControl({ item, valor, onResponder }) {
+function RespuestaControl({ item, valor, onResponder, requiereFotoParaVerificar, tieneFoto, onAbrirCamara }) {
   if (item.tipo_respuesta === 'ESCALA_5' || item.tipo_respuesta === 'ESCALA_10') {
     const max = item.tipo_respuesta === 'ESCALA_5' ? 5 : 10;
     return (
@@ -612,9 +643,19 @@ function RespuestaControl({ item, valor, onResponder }) {
     );
   }
   if (item.tipo_respuesta === 'CHECKBOX') {
+    // Si el ítem exige foto y todavía no hay ninguna, tildar "Verificado" en
+    // vez de marcarse solo abre la cámara - la prueba de que está verificado
+    // es la foto, no el toque. Una vez que esa foto se sube (y, si el ítem
+    // pide IA, la aprueba), el casillero se tilda solo (ver
+    // marcarVerificadoSiCorresponde en Ejecucion). Destildar sigue siendo
+    // directo, y si ya hay foto, tildar también lo es.
+    function alTocar(e) {
+      if (e.target.checked && requiereFotoParaVerificar && !tieneFoto) { onAbrirCamara?.(); return; }
+      onResponder(e.target.checked);
+    }
     return (
       <label className="flex items-center gap-2 text-sm text-gray-700">
-        <input type="checkbox" checked={valor === true} onChange={(e) => onResponder(e.target.checked)} /> Verificado
+        <input type="checkbox" checked={valor === true} onChange={alTocar} /> Verificado
       </label>
     );
   }
