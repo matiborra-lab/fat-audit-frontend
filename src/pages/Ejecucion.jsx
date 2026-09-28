@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { api, subirArchivo } from '../api/client';
+import { api, subirArchivo, verificarFotoIA } from '../api/client';
 import { Boton, Cargando, EtiquetaArea } from '../components/ui';
 
 function claveBorrador(runId) {
@@ -76,6 +76,7 @@ export default function Ejecucion() {
   const [run, setRun] = useState(null);
   const [respuestas, setRespuestas] = useState({}); // item_id -> {valor_json, comentario, no_aplica, pendiente}
   const [evidencias, setEvidencias] = useState({}); // item_id -> [{id, tipo, url}]
+  const [verificacionIA, setVerificacionIA] = useState({}); // item_id -> {analizando, rechazada, razon, intentos, archivo}
   const [paso, setPaso] = useState(0);
   const [error, setError] = useState('');
   const [subiendo, setSubiendo] = useState(null); // item_id en subida
@@ -234,11 +235,64 @@ export default function Ejecucion() {
     setEvidencias((prev) => ({ ...prev, [itemId]: prev[itemId].filter((e) => e.id !== evidenciaId) }));
   }
 
+  function limpiarEstadoIA(itemId) {
+    setVerificacionIA((prev) => {
+      const copia = { ...prev };
+      delete copia[itemId];
+      return copia;
+    });
+  }
+
+  // Para ítems con verificacion_ia, la foto pasa primero por
+  // POST /api/runs/:id/verificar-foto (ver api/client.js): si la IA la
+  // aprueba, el servidor ya la subió y devuelve la evidencia lista (igual
+  // que subirEvidencia); si no la aprueba, no se sube nada y queda el
+  // motivo en pantalla para que el auditor la vuelva a sacar. `forzar` se
+  // usa después de varios intentos fallidos: el auditor decide continuar
+  // igual, la foto se sube pero el intento queda marcado como no
+  // verificado (se avisa a los gerentes al finalizar la auditoría). Si la
+  // IA no está configurada en el servidor, no bloquea: sube la foto por el
+  // camino normal, sin verificación.
+  async function subirEvidenciaConIA(item, file, forzar = false) {
+    setSubiendo(item.id);
+    setVerificacionIA((prev) => ({ ...prev, [item.id]: { analizando: true } }));
+    try {
+      const resultado = await verificarFotoIA({ runId: id, itemId: item.id, archivo: file, forzar });
+      if (resultado.aprobado === null) {
+        limpiarEstadoIA(item.id);
+        return await subirEvidencia(item, file);
+      }
+      if (resultado.aprobado) {
+        setEvidencias((prev) => ({ ...prev, [item.id]: [...(prev[item.id] || []), resultado.evidencia] }));
+        limpiarEstadoIA(item.id);
+        return resultado.evidencia;
+      }
+      setVerificacionIA((prev) => ({ ...prev, [item.id]: { rechazada: true, razon: resultado.razon, intentos: resultado.intentos, archivo: file } }));
+      return null;
+    } catch (err) {
+      setError('No se pudo analizar la foto: ' + err.message);
+      limpiarEstadoIA(item.id);
+      return null;
+    } finally {
+      setSubiendo(null);
+    }
+  }
+
+  // La cámara de un ítem con verificacion_ia pasa por el análisis solo
+  // cuando lo que se sacó es una foto - un video (en ítems FOTO_O_VIDEO) se
+  // sube directo, la IA no analiza video.
+  function manejarArchivo(item, file) {
+    if (item.verificacion_ia && file.type.startsWith('image')) return subirEvidenciaConIA(item, file);
+    return subirEvidencia(item, file);
+  }
+
   // Reemplazar: sube el archivo nuevo primero y recién después borra el
   // viejo, para que el ítem nunca quede sin evidencia en el medio (relevante
-  // si esa evidencia era la única que cumplía un requisito obligatorio).
+  // si esa evidencia era la única que cumplía un requisito obligatorio). Si
+  // el ítem exige verificación por IA, el reemplazo también pasa por ahí -
+  // si no, "reemplazar" sería una forma de esquivar el análisis.
   async function reemplazarEvidencia(item, evidenciaVieja, file) {
-    const nueva = await subirEvidencia(item, file);
+    const nueva = await manejarArchivo(item, file);
     if (nueva) await quitarEvidencia(item.id, evidenciaVieja.id);
   }
 
@@ -308,13 +362,15 @@ export default function Ejecucion() {
                 respuesta={respuestas[item.id] || {}}
                 evidencias={evidencias[item.id] || []}
                 subiendo={subiendo === item.id}
+                estadoIA={verificacionIA[item.id]}
                 onResponder={(v) => responder(item.id, v)}
                 onComentar={(c) => comentar(item.id, c)}
                 onComentarBlur={() => comentarBlur(item.id)}
                 onNoAplica={(v) => marcarNoAplica(item.id, v)}
-                onArchivo={(f) => subirEvidencia(item, f)}
+                onArchivo={(f) => manejarArchivo(item, f)}
                 onQuitarEvidencia={(eid) => quitarEvidencia(item.id, eid)}
                 onReemplazarEvidencia={(evidenciaVieja, f) => reemplazarEvidencia(item, evidenciaVieja, f)}
+                onForzarIA={(f) => subirEvidenciaConIA(item, f, true)}
               />
             ))}
           </div>
@@ -366,7 +422,9 @@ export default function Ejecucion() {
   );
 }
 
-function ItemCard({ item, areaNombre, respuesta, evidencias, subiendo, onResponder, onComentar, onComentarBlur, onNoAplica, onArchivo, onQuitarEvidencia, onReemplazarEvidencia }) {
+const INTENTOS_PARA_FORZAR_IA = 3;
+
+function ItemCard({ item, areaNombre, respuesta, evidencias, subiendo, estadoIA, onResponder, onComentar, onComentarBlur, onNoAplica, onArchivo, onQuitarEvidencia, onReemplazarEvidencia, onForzarIA }) {
   const reglaDisparada = (item.reglas || []).find((r) => evaluarCondicion(r.condicion_json.operador, respuesta.valor_json, r.condicion_json.valor));
   const acciones = reglaDisparada?.acciones_json;
   const requiereFoto = item.evidencia_requerida === 'FOTO' || !!acciones?.foto_obligatoria;
@@ -411,6 +469,7 @@ function ItemCard({ item, areaNombre, respuesta, evidencias, subiendo, onRespond
         )}
       </div>
       {item.ayuda_texto && <p className="text-xs text-gray-400">{item.ayuda_texto}</p>}
+      {item.verificacion_ia && item.criterio_ia && <p className="text-xs text-fat-bordo-400">📷 IA verifica: {item.criterio_ia}</p>}
 
       {!respuesta.no_aplica && <RespuestaControl item={item} valor={respuesta.valor_json} onResponder={onResponder} />}
 
@@ -431,6 +490,24 @@ function ItemCard({ item, areaNombre, respuesta, evidencias, subiendo, onRespond
                 vez de agregar uno nuevo (una foto ya cargada alcanza). */}
             <BotonEvidencia label="" accept="image/*" capture="environment" onArchivo={onArchivo} resaltado={faltaFoto || faltaFotoOVideo} disabled={subiendo} icono />
           </div>
+
+          {estadoIA?.analizando && (
+            <p className="text-xs text-fat-bordo-600 flex items-center gap-1.5">
+              <span className="inline-block w-3 h-3 rounded-full border-2 border-fat-bordo-200 border-t-fat-bordo-600 animate-spin" />
+              Analizando la foto con IA…
+            </p>
+          )}
+          {estadoIA?.rechazada && (
+            <div className="text-xs bg-fat-bordo-50 text-fat-bordo-700 rounded-lg px-3 py-2 space-y-1">
+              <p>La IA no encontró cumplida la tarea: {estadoIA.razon}</p>
+              <p className="text-fat-bordo-400">Sacá la foto de nuevo (intento {estadoIA.intentos}).</p>
+              {estadoIA.intentos >= INTENTOS_PARA_FORZAR_IA && (
+                <button type="button" className="underline font-medium" onClick={() => onForzarIA(estadoIA.archivo)}>
+                  Continuar sin verificar
+                </button>
+              )}
+            </div>
+          )}
 
           {(requiereVideo || (requiereFotoOVideo && fotos.length === 0)) && (
             <div className="flex flex-wrap items-center gap-2">

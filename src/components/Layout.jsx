@@ -127,7 +127,7 @@ function CampanaNotificaciones({ abrirHaciaArriba = false }) {
   async function marcarLeida(n) {
     if (!n.leida_en) await api.post(`/api/notificaciones/${n.id}/leida`);
     recargar();
-    if (n.tipo === 'PEDIDO_MERCADERIA' && n.payload_json?.url) {
+    if ((n.tipo === 'PEDIDO_MERCADERIA' || n.tipo === 'AUDITORIA_ITEMS_NO_VERIFICADOS') && n.payload_json?.url) {
       setAbierto(false);
       navigate(n.payload_json.url);
     } else if (n.tipo === 'COMUNICADO' && !n.payload_json?.solo_push) {

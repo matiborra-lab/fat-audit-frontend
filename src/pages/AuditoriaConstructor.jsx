@@ -33,6 +33,7 @@ function aEstructuraEditable(data) {
       texto: it.texto, ayuda_texto: it.ayuda_texto, tipo_respuesta: it.tipo_respuesta,
       opciones_json: it.opciones_json, peso: it.peso, critico: it.critico, informe_in_situ: it.informe_in_situ,
       evidencia_requerida: it.evidencia_requerida, permite_no_aplica: it.permite_no_aplica,
+      verificacion_ia: it.verificacion_ia, criterio_ia: it.criterio_ia,
       reglas: (it.reglas || []).map((r) => ({ condicion: r.condicion_json, acciones: r.acciones_json })),
     })),
     umbrales: data.umbrales.map((u) => ({
@@ -108,7 +109,8 @@ function BotonesOrden({ i, total, onMover }) {
 function nuevoItem(sector, area) {
   return {
     sector, area, texto: '', ayuda_texto: '', tipo_respuesta: 'CHECKBOX', opciones_json: null, peso: null,
-    critico: false, informe_in_situ: false, evidencia_requerida: 'NINGUNA', permite_no_aplica: true, reglas: [],
+    critico: false, informe_in_situ: false, evidencia_requerida: 'NINGUNA', permite_no_aplica: true,
+    verificacion_ia: false, criterio_ia: '', reglas: [],
   };
 }
 
@@ -463,7 +465,20 @@ function SeccionItems({ estructura, actualizar }) {
                     {EVIDENCIA_OPCIONES.map((op) => <option key={op} value={op}>{op}</option>)}
                   </select>
                 </label>
+                {(it.evidencia_requerida === 'FOTO' || it.evidencia_requerida === 'FOTO_O_VIDEO') && (
+                  <label className="flex items-center gap-1">
+                    <input type="checkbox" checked={it.verificacion_ia} onChange={(e) => set(i, 'verificacion_ia', e.target.checked)} /> Verificar la foto con IA
+                  </label>
+                )}
               </div>
+              {it.verificacion_ia && (it.evidencia_requerida === 'FOTO' || it.evidencia_requerida === 'FOTO_O_VIDEO') && (
+                <input
+                  className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
+                  value={it.criterio_ia || ''}
+                  onChange={(e) => set(i, 'criterio_ia', e.target.value)}
+                  placeholder='Qué debe verse cumplido en la foto, ej: "La freidora debe estar limpia, sin restos de aceite ni comida"'
+                />
+              )}
               {it.tipo_respuesta === 'SI_NO' && (
                 <label className="flex items-center gap-2 text-xs text-gray-600">
                   Puntúa a favor:

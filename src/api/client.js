@@ -102,6 +102,28 @@ export async function subirArchivo({ rutaUrlSubida, carpeta, referencia, archivo
   return subirPorServidor({ carpeta, referencia, archivo, contentType });
 }
 
+// Manda la foto cruda a analizar con IA (ver POST /api/runs/:id/verificar-foto
+// en el backend) - a diferencia de subirArchivo, acá el archivo siempre pasa
+// por la API (no hay URL firmada: el servidor necesita los bytes para
+// mandarlos al modelo) y la respuesta no es una URL sino el veredicto
+// completo ({ aprobado, razon, intentos, evidencia? }).
+export async function verificarFotoIA({ runId, itemId, archivo, forzar = false }) {
+  const token = obtenerToken();
+  let resp;
+  try {
+    resp = await fetch(`${API_URL}/api/runs/${runId}/verificar-foto?item_id=${itemId}${forzar ? '&forzar=1' : ''}`, {
+      method: 'POST',
+      headers: { 'Content-Type': archivo.type, ...(token ? { Authorization: 'Bearer ' + token } : {}) },
+      body: archivo,
+    });
+  } catch (err) {
+    throw new Error('No se pudo analizar la foto: falló la conexión con el servidor. Revisá tu conexión e intentá de nuevo.');
+  }
+  const data = await resp.json().catch(() => null);
+  if (!resp.ok) throw new Error(data?.error || 'No se pudo analizar la foto (error ' + resp.status + ')');
+  return data;
+}
+
 export const api = {
   get: (ruta, opciones) => pedido('GET', ruta, null, opciones),
   post: (ruta, body, opciones) => pedido('POST', ruta, body, opciones),

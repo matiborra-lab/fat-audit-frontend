@@ -141,6 +141,20 @@ export default function NotificacionPreferencias() {
         </Tarjeta>
       )}
 
+      {/* Solo gerentes: aviso cuando una auditoría de su sucursal termina con
+          algún punto que el auditor no logró que la IA aprobara. */}
+      {usuario.rol === 'GERENTE' && (
+        <Tarjeta className="p-4">
+          <label className="flex items-center justify-between gap-3 text-sm">
+            <div>
+              <p className="font-medium text-gray-900">Puntos sin verificar por IA</p>
+              <p className="text-xs text-gray-400">Aviso cuando una auditoría de tu sucursal termina con algún ítem que no pasó la verificación por foto</p>
+            </div>
+            <input type="checkbox" checked={pref('AUDITORIA_ITEMS_NO_VERIFICADOS').habilitado} onChange={(e) => actualizar('AUDITORIA_ITEMS_NO_VERIFICADOS', { habilitado: e.target.checked })} />
+          </label>
+        </Tarjeta>
+      )}
+
       {TIPOS_SIMPLES.map((t) => {
         const p = pref(t.tipo);
         return (
