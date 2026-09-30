@@ -17,12 +17,25 @@ function valorLegible(item, valor) {
   return String(valor);
 }
 
+// Último intento de verificación por IA de un ítem (puede haber varios si
+// el auditor sacó la foto más de una vez) - el id más alto es el más
+// reciente. null si el ítem no tiene ninguno.
+function ultimaVerificacionIA(verificacionesIA, itemId) {
+  const delItem = (verificacionesIA || []).filter((v) => v.item_id === itemId);
+  if (!delItem.length) return null;
+  return delItem.reduce((mas, v) => (v.id > mas.id ? v : mas));
+}
+
 export default function HistorialDetalle() {
   const { id } = useParams();
   const { usuario } = useAuth();
   const puedeGenerarSeguimiento = usuario.rol === 'ADMIN' || usuario.rol === 'AUDITOR';
+  // Mismo rol que puede generar seguimiento - también puede corregir un
+  // ítem después de finalizada la auditoría (ver revisarRespuesta).
+  const puedeRevisar = puedeGenerarSeguimiento;
   const [run, setRun] = useState(null);
   const [error, setError] = useState('');
+  const [revisando, setRevisando] = useState(null); // item_id en revisión
   const [seleccionSeguimiento, setSeleccionSeguimiento] = useState(null); // null = no esta eligiendo
   const [programandoSeguimiento, setProgramandoSeguimiento] = useState(false); // 2do paso: sucursal/responsable/fecha
   const [formProgramar, setFormProgramar] = useState({ responsable: null, fecha: '', notificar: true });
@@ -87,6 +100,24 @@ export default function HistorialDetalle() {
       setError(err.message);
     } finally {
       setEnviando(false);
+    }
+  }
+
+  // Corrige el "Verificado" de un ítem ya finalizado (ej: la IA no aprobó
+  // una foto que a criterio del revisor sí cumple) - el backend recalcula
+  // puntaje/semáforo/resultado al toque, por eso se vuelve a pedir toda la
+  // auditoría en vez de actualizar el estado a mano.
+  async function revisarRespuesta(itemId, checked) {
+    setRevisando(itemId);
+    setError('');
+    try {
+      await api.put(`/api/runs/${id}/respuestas/${itemId}/revision`, { valor_json: checked });
+      recargar();
+      setToast('Punto revisado — el puntaje se recalculó');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setRevisando(null);
     }
   }
 
@@ -239,6 +270,12 @@ export default function HistorialDetalle() {
                 const resp = respuestaPorItem.get(item.id);
                 const evidenciasItem = resp ? evidenciasPorRespuesta.get(resp.id) || [] : [];
                 const marcado = seleccionSeguimiento?.has(item.id);
+                const verificacionIA = item.verificacion_ia ? ultimaVerificacionIA(run.verificaciones_ia, item.id) : null;
+                // El "Verificado" de un ítem CHECKBOX se puede corregir a
+                // mano una vez finalizada la auditoría (ej: la IA no aprobó
+                // una foto que a criterio del revisor sí cumple) - mientras
+                // sigue en progreso, se edita como siempre desde Ejecución.
+                const esEditable = puedeRevisar && item.tipo_respuesta === 'CHECKBOX' && !resp?.no_aplica && run.estado === 'COMPLETADA';
                 return (
                   <div key={item.id} className={`px-4 py-3 flex items-start gap-3 ${marcado ? 'bg-fat-bordo-50/40' : ''}`}>
                     {seleccionSeguimiento && !programandoSeguimiento && (
@@ -268,10 +305,28 @@ export default function HistorialDetalle() {
                           ))}
                         </div>
                       )}
+                      {verificacionIA && !verificacionIA.aprobado && (
+                        <p className="text-xs text-fat-bordo-600 mt-1">
+                          🤖 Fatricio no aprobó esta foto: {verificacionIA.razon}
+                          {esEditable && ' — si a tu criterio sí cumple, tildá "Verificado" al lado →'}
+                        </p>
+                      )}
                     </div>
-                    <span className="text-sm font-medium text-gray-700 shrink-0">
-                      {resp?.no_aplica ? 'No aplica' : valorLegible(item, resp?.valor_json)}
-                    </span>
+                    {esEditable ? (
+                      <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 shrink-0">
+                        <input
+                          type="checkbox"
+                          checked={resp?.valor_json === true}
+                          disabled={revisando === item.id}
+                          onChange={(e) => revisarRespuesta(item.id, e.target.checked)}
+                        />
+                        {resp?.valor_json === true ? 'Verificado' : 'Pendiente'}
+                      </label>
+                    ) : (
+                      <span className="text-sm font-medium text-gray-700 shrink-0">
+                        {resp?.no_aplica ? 'No aplica' : valorLegible(item, resp?.valor_json)}
+                      </span>
+                    )}
                   </div>
                 );
               })}
