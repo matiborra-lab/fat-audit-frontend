@@ -256,32 +256,31 @@ export default function Ejecucion() {
   }
 
   // Para ítems con verificacion_ia, la foto pasa primero por
-  // POST /api/runs/:id/verificar-foto (ver api/client.js): si la IA la
-  // aprueba, el servidor ya la subió y devuelve la evidencia lista (igual
-  // que subirEvidencia); si no la aprueba, no se sube nada y queda el
-  // motivo en pantalla para que el auditor la vuelva a sacar. `forzar` se
-  // usa después de varios intentos fallidos: el auditor decide continuar
-  // igual, la foto se sube pero el intento queda marcado como no
-  // verificado (se avisa a los gerentes al finalizar la auditoría). Si la
-  // IA no está configurada en el servidor, no bloquea: sube la foto por el
-  // camino normal, sin verificación.
-  async function subirEvidenciaConIA(item, file, forzar = false) {
+  // POST /api/runs/:id/verificar-foto (ver api/client.js): la IA la analiza
+  // y el servidor la sube SIEMPRE, la apruebe o no - no tiene sentido
+  // bloquear guardar/finalizar la auditoría por esto. Si no la aprueba, el
+  // motivo queda un momento en pantalla y el ítem se marca como no
+  // verificado (se avisa a los gerentes al finalizar la auditoría), pero el
+  // auditor puede seguir de largo sin volver a intentarlo. Si la IA no está
+  // configurada en el servidor, tampoco bloquea: sube la foto por el camino
+  // normal, sin verificación.
+  async function subirEvidenciaConIA(item, file) {
     setSubiendo(item.id);
     setVerificacionIA((prev) => ({ ...prev, [item.id]: { analizando: true } }));
     try {
-      const resultado = await verificarFotoIA({ runId: id, itemId: item.id, archivo: file, forzar });
+      const resultado = await verificarFotoIA({ runId: id, itemId: item.id, archivo: file });
       if (resultado.aprobado === null) {
         limpiarEstadoIA(item.id);
         return await subirEvidencia(item, file);
       }
+      setEvidencias((prev) => ({ ...prev, [item.id]: [...(prev[item.id] || []), resultado.evidencia] }));
       if (resultado.aprobado) {
-        setEvidencias((prev) => ({ ...prev, [item.id]: [...(prev[item.id] || []), resultado.evidencia] }));
         marcarVerificadoSiCorresponde(item);
         limpiarEstadoIA(item.id);
-        return resultado.evidencia;
+      } else {
+        setVerificacionIA((prev) => ({ ...prev, [item.id]: { rechazada: true, razon: resultado.razon } }));
       }
-      setVerificacionIA((prev) => ({ ...prev, [item.id]: { rechazada: true, razon: resultado.razon, intentos: resultado.intentos, archivo: file } }));
-      return null;
+      return resultado.evidencia;
     } catch (err) {
       setError('No se pudo analizar la foto: ' + err.message);
       limpiarEstadoIA(item.id);
@@ -383,7 +382,6 @@ export default function Ejecucion() {
                 onArchivo={(f) => manejarArchivo(item, f)}
                 onQuitarEvidencia={(eid) => quitarEvidencia(item.id, eid)}
                 onReemplazarEvidencia={(evidenciaVieja, f) => reemplazarEvidencia(item, evidenciaVieja, f)}
-                onForzarIA={(f) => subirEvidenciaConIA(item, f, true)}
               />
             ))}
           </div>
@@ -435,9 +433,7 @@ export default function Ejecucion() {
   );
 }
 
-const INTENTOS_PARA_FORZAR_IA = 3;
-
-function ItemCard({ item, areaNombre, respuesta, evidencias, subiendo, estadoIA, onResponder, onComentar, onComentarBlur, onNoAplica, onArchivo, onQuitarEvidencia, onReemplazarEvidencia, onForzarIA }) {
+function ItemCard({ item, areaNombre, respuesta, evidencias, subiendo, estadoIA, onResponder, onComentar, onComentarBlur, onNoAplica, onArchivo, onQuitarEvidencia, onReemplazarEvidencia }) {
   const reglaDisparada = (item.reglas || []).find((r) => evaluarCondicion(r.condicion_json.operador, respuesta.valor_json, r.condicion_json.valor));
   const acciones = reglaDisparada?.acciones_json;
   const requiereFoto = item.evidencia_requerida === 'FOTO' || !!acciones?.foto_obligatoria;
@@ -527,12 +523,7 @@ function ItemCard({ item, areaNombre, respuesta, evidencias, subiendo, estadoIA,
           {estadoIA?.rechazada && (
             <div className="text-xs bg-fat-bordo-50 text-fat-bordo-700 rounded-lg px-3 py-2 space-y-1">
               <p>Fatricio no aprobó la foto: {estadoIA.razon}</p>
-              <p className="text-fat-bordo-400">Sacá la foto de nuevo (intento {estadoIA.intentos}).</p>
-              {estadoIA.intentos >= INTENTOS_PARA_FORZAR_IA && (
-                <button type="button" className="underline font-medium" onClick={() => onForzarIA(estadoIA.archivo)}>
-                  Continuar sin verificar
-                </button>
-              )}
+              <p className="text-fat-bordo-400">Igual quedó guardada - podés sacar otra si querés, o seguir así.</p>
             </div>
           )}
 

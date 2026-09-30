@@ -106,12 +106,13 @@ export async function subirArchivo({ rutaUrlSubida, carpeta, referencia, archivo
 // en el backend) - a diferencia de subirArchivo, acá el archivo siempre pasa
 // por la API (no hay URL firmada: el servidor necesita los bytes para
 // mandarlos al modelo) y la respuesta no es una URL sino el veredicto
-// completo ({ aprobado, razon, intentos, evidencia? }).
-export async function verificarFotoIA({ runId, itemId, archivo, forzar = false }) {
+// completo ({ aprobado, razon, intentos, evidencia }). La foto se sube
+// siempre, la apruebe la IA o no - no bloquea guardar la auditoría.
+export async function verificarFotoIA({ runId, itemId, archivo }) {
   const token = obtenerToken();
   let resp;
   try {
-    resp = await fetch(`${API_URL}/api/runs/${runId}/verificar-foto?item_id=${itemId}${forzar ? '&forzar=1' : ''}`, {
+    resp = await fetch(`${API_URL}/api/runs/${runId}/verificar-foto?item_id=${itemId}`, {
       method: 'POST',
       headers: { 'Content-Type': archivo.type, ...(token ? { Authorization: 'Bearer ' + token } : {}) },
       body: archivo,
