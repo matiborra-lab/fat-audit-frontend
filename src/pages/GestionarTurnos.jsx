@@ -62,6 +62,7 @@ export default function GestionarTurnos() {
   const [turnos, setTurnos] = useState(null);
 
   const [celdaAbierta, setCeldaAbierta] = useState(null); // { fecha, turnoTipo }
+  const [detallePuesto, setDetallePuesto] = useState(null); // { fecha, turnoTipo, puesto } - mobile: detalle de quiénes están en ese puesto
   const [formAlta, setFormAlta] = useState({ responsable: null, puesto: '' });
   const [guardandoAlta, setGuardandoAlta] = useState(false);
 
@@ -382,9 +383,20 @@ export default function GestionarTurnos() {
             const lista = turnosPorDia.get(`${claveFecha}|${turnoTipo}|${p}`) || [];
             return (
               <div key={p} className="text-[9px] sm:text-[10px]">
-                <span className="text-gray-400">{PUESTO_LABEL[p]} ({lista.length})</span>
+                {/* Mobile: solo el chip "Cocina (3)" - al tocarlo se abre el
+                    detalle con las personas (nombre completo) para gestionarlas
+                    ahí. Desktop: la lista va inline, con el nombre completo y
+                    la × para sacar. */}
+                <button
+                  type="button"
+                  onClick={() => lista.length > 0 && setDetallePuesto({ fecha: claveFecha, turnoTipo, puesto: p })}
+                  className={`sm:hidden text-left leading-tight ${lista.length > 0 ? 'text-fat-bordo-600 font-medium underline decoration-dotted' : 'text-gray-400'}`}
+                >
+                  {PUESTO_LABEL[p]} ({lista.length})
+                </button>
+                <span className="hidden sm:inline text-gray-400">{PUESTO_LABEL[p]} ({lista.length})</span>
                 {lista.length > 0 && (
-                  <div className="flex flex-col gap-0.5 mt-0.5 min-w-0">
+                  <div className="hidden sm:flex flex-col gap-0.5 mt-0.5 min-w-0">
                     {lista.map((t) => (
                       <span
                         key={t.id}
@@ -582,6 +594,33 @@ export default function GestionarTurnos() {
           </Tarjeta>
         </>
       )}
+
+      {detallePuesto && (() => {
+        const lista = turnosPorDia.get(`${detallePuesto.fecha}|${detallePuesto.turnoTipo}|${detallePuesto.puesto}`) || [];
+        return (
+          <Modal
+            titulo={`${PUESTO_LABEL[detallePuesto.puesto]} · ${TURNO_LABEL[detallePuesto.turnoTipo]} · ${new Date(`${detallePuesto.fecha}T00:00:00`).toLocaleDateString('es-AR', { weekday: 'long', day: '2-digit', month: '2-digit' })}`}
+            onClose={() => setDetallePuesto(null)}
+          >
+            <div className="space-y-2">
+              {lista.length === 0 && <p className="text-sm text-gray-400">Ya no hay nadie en este puesto.</p>}
+              {lista.map((t) => (
+                <div key={t.id} className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 px-3 py-2">
+                  <div className="min-w-0">
+                    <p className="text-sm text-gray-900">{t.responsable_nombre || '—'}</p>
+                    <p className="text-xs text-gray-400">{t.solicitud_revision_estado === 'PENDIENTE' ? 'Pidió revisión' : t.asignacion_confirmada ? 'Asignado' : 'Pendiente de confirmar'}</p>
+                  </div>
+                  <button onClick={() => eliminarTurno(t.id)} className="text-gray-400 hover:text-fat-bordo-600 text-lg leading-none shrink-0 px-1" aria-label={`Sacar a ${t.responsable_nombre}`}>&times;</button>
+                </div>
+              ))}
+              <div className="flex gap-2 pt-1">
+                <Boton ancho="w-auto" onClick={() => { const { fecha, turnoTipo } = detallePuesto; setDetallePuesto(null); abrirAlta(fecha, turnoTipo); }}>Agregar persona</Boton>
+                <Boton ancho="w-auto" variante="secundario" onClick={() => setDetallePuesto(null)}>Cerrar</Boton>
+              </div>
+            </div>
+          </Modal>
+        );
+      })()}
 
       {celdaAbierta && (
         <Modal
