@@ -37,3 +37,42 @@ export function textoDemora(dias) {
   if (dias == null) return '—';
   return `${dias} día${dias === 1 ? '' : 's'}`;
 }
+
+// ---- Enviar saldo por WhatsApp (Reportes > Saldos pendientes de una sucursal) ----
+
+// Número para wa.me: solo dígitos, con 54 + 9 de Argentina. El teléfono
+// administrativo se carga con código de área y sin 0 ni 15 (ej. 2236123456).
+export function telefonoParaWhatsapp(telefono) {
+  let d = String(telefono || '').replace(/\D/g, '').replace(/^0+/, '');
+  if (!d) return '';
+  if (d.startsWith('54')) return d.startsWith('549') ? d : '549' + d.slice(2);
+  return '549' + d;
+}
+
+const plata = (n) => pesos(n).replace('$', '$ ');
+
+// Mensaje de cuenta corriente: los pedidos con saldo (ya retirados), del más
+// antiguo al más nuevo, y el total adeudado. Los *…* son negrita en WhatsApp.
+export function armarMensajeSaldo({ sucursalNombre, pedidos }) {
+  const total = pedidos.reduce((acc, p) => acc + Number(p.saldo || 0), 0);
+  const bloques = pedidos.map((p) => {
+    const lineas = [`*Pedido ${numeroPedido(p.id)}*`, `Fecha: ${fechaCorta(p.creado_en)}`];
+    if (Number(p.abonado) > 0) {
+      lineas.push(`Monto: ${plata(p.total)}`, `Pagado: ${plata(p.abonado)} · Saldo: ${plata(p.saldo)}`);
+    } else {
+      lineas.push(`Monto: ${plata(p.saldo)}`);
+    }
+    return lineas.join('\n');
+  });
+  return [
+    `*Cuenta corriente - Fatburger ${sucursalNombre}*`,
+    `Mercadería FAT · Saldo pendiente al ${fechaCorta(new Date())}`,
+    '',
+    bloques.join('\n\n'),
+    '',
+    '━━━━━━━━━━━━━━',
+    `*TOTAL ADEUDADO: ${plata(total)}*`,
+    '',
+    'Cualquier duda, respondé a este mensaje.',
+  ].join('\n');
+}

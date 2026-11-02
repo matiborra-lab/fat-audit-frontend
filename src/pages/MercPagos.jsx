@@ -4,7 +4,7 @@ import { api, descargarPdf } from '../api/client';
 import { Tarjeta, Boton, Modal, Select, Toast, Cargando } from '../components/ui';
 import { EstadoPedido, Editado } from '../components/MercUI';
 import MercFiltros, { FILTROS_VACIOS, queryDeFiltros } from '../components/MercFiltros';
-import { pesos, textoSaldo, numeroPedido, fechaCorta, textoDemora } from '../utils/mercaderia';
+import { pesos, textoSaldo, numeroPedido, fechaCorta, textoDemora, telefonoParaWhatsapp, armarMensajeSaldo } from '../utils/mercaderia';
 
 function Indicador({ etiqueta, valor, destacado }) {
   return (
@@ -308,7 +308,29 @@ function ModalReportes({ sucursales, onClose }) {
   const [desde, setDesde] = useState('');
   const [hasta, setHasta] = useState('');
   const [generando, setGenerando] = useState(false);
+  const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState('');
+  const sucursal = sucursales.find((s) => String(s.id) === String(sucursalId));
+  const telefonoWa = telefonoParaWhatsapp(sucursal?.telefono_administrativo);
+
+  async function enviarSaldo() {
+    setError('');
+    setEnviando(true);
+    // La pestaña se abre ya, en el toque (si se abre después del pedido, los
+    // celulares la bloquean como ventana emergente), y se completa al tener el mensaje.
+    const ventana = window.open('', '_blank');
+    try {
+      const pedidos = await api.get(`/api/merc/pedidos?sucursal_id=${sucursal.id}&con_saldo=1&orden=antiguos`);
+      if (!pedidos.length) { ventana?.close(); setError('Esta sucursal no tiene pedidos con saldo pendiente.'); return; }
+      const url = `https://wa.me/${telefonoWa}?text=${encodeURIComponent(armarMensajeSaldo({ sucursalNombre: sucursal.nombre, pedidos }))}`;
+      if (ventana) ventana.location.href = url; else window.location.href = url;
+    } catch (err) {
+      ventana?.close();
+      setError(err.message);
+    } finally {
+      setEnviando(false);
+    }
+  }
 
   async function generar() {
     setError('');
@@ -351,6 +373,14 @@ function ModalReportes({ sucursales, onClose }) {
         )}
         {error && <p className="text-sm text-fat-bordo-600">{error}</p>}
         <Boton disabled={generando} onClick={generar}>{generando ? 'Generando…' : 'Generar PDF'}</Boton>
+        {/* Solo con la deuda de UNA sucursal: arma el mensaje de cuenta
+            corriente y abre WhatsApp con la administración de esa sucursal. */}
+        {tipo === 'saldos' && sucursal && (
+          <div className="space-y-1">
+            <Boton variante="secundario" disabled={enviando || !telefonoWa} onClick={enviarSaldo}>{enviando ? 'Armando mensaje…' : 'Enviar saldo por WhatsApp'}</Boton>
+            {!telefonoWa && <p className="text-xs text-gray-400">Esta sucursal no tiene teléfono administrativo cargado (se carga en Configuración &gt; Sucursales).</p>}
+          </div>
+        )}
       </div>
     </Modal>
   );

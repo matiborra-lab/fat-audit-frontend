@@ -191,6 +191,7 @@ export default function Sucursales() {
     setFormEditar({
       nombre: s.nombre, codigo: s.codigo || '', direccion: s.direccion || '', activo: s.activo,
       latitud: s.latitud ?? '', longitud: s.longitud ?? '',
+      telefono_administrativo: s.telefono_administrativo || '',
     });
   }
 
@@ -260,6 +261,10 @@ export default function Sucursales() {
             <Campo label="Nombre" required value={formEditar.nombre} onChange={(e) => setFormEditar({ ...formEditar, nombre: e.target.value })} autoFocus />
             <Campo label="Código (opcional)" value={formEditar.codigo} onChange={(e) => setFormEditar({ ...formEditar, codigo: e.target.value })} />
             <Campo label="Dirección (opcional)" value={formEditar.direccion} onChange={(e) => setFormEditar({ ...formEditar, direccion: e.target.value })} />
+            <div>
+              <Campo label="Teléfono administrativo (WhatsApp, opcional)" type="tel" inputMode="numeric" placeholder="2236123456" value={formEditar.telefono_administrativo} onChange={(e) => setFormEditar({ ...formEditar, telefono_administrativo: e.target.value })} />
+              <Leyenda>Quien se encarga de pagar la mercadería. Con código de área, sin 0 ni 15 (ej. 2236123456). Se usa en Mercadería FAT &gt; Reportes &gt; Enviar saldo.</Leyenda>
+            </div>
             <div>
               <Leyenda>Para mostrar el clima en el calendario de esta sucursal. En Google Maps, clic derecho sobre la ubicación y copiar las coordenadas.</Leyenda>
               <div className="grid grid-cols-2 gap-3 mt-2">
