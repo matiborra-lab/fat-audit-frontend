@@ -263,7 +263,7 @@ export default function GestionarTurnos() {
         turno_tipo: formProgramar.turnoTipo, dias_semana: formProgramar.diasSemana,
         fecha_desde: formProgramar.fechaDesde, fecha_hasta: formProgramar.fechaHasta || null,
       });
-      setToast(`${resultado.creados} turnos programados, pendientes de confirmar` + (resultado.ventanaSinFin ? ` (próximos ${resultado.ventanaSinFin} días - sin fecha hasta, hay que volver a programar más adelante)` : ''));
+      setToast(`${resultado.creados} turnos programados, pendientes de confirmar` + (resultado.omitidosPorDuplicado ? ` (${resultado.omitidosPorDuplicado} día(s) salteados: ya tenía ese turno)` : '') + (resultado.ventanaSinFin ? ` (próximos ${resultado.ventanaSinFin} días - sin fecha hasta, hay que volver a programar más adelante)` : ''));
       setFormProgramar({ responsable: null, puesto: '', turnoTipo: 'DIURNO', diasSemana: [], fechaDesde: hoyISO(), fechaHasta: '' });
       recargar();
     } catch (err) {
@@ -384,18 +384,21 @@ export default function GestionarTurnos() {
               <div key={p} className="text-[9px] sm:text-[10px]">
                 <span className="text-gray-400">{PUESTO_LABEL[p]} ({lista.length})</span>
                 {lista.length > 0 && (
-                  <div className="flex flex-wrap gap-0.5 mt-0.5 min-w-0">
+                  <div className="flex flex-col gap-0.5 mt-0.5 min-w-0">
                     {lista.map((t) => (
                       <span
                         key={t.id}
                         title={`${t.responsable_nombre || ''} · ${t.asignacion_confirmada ? 'Asignado' : 'Pendiente de confirmar'}`}
-                        className={`inline-flex items-center gap-0.5 px-1 py-0.5 rounded max-w-full min-w-0 ${
+                        className={`flex items-start justify-between gap-0.5 px-1 py-0.5 rounded min-w-0 ${
                           t.solicitud_revision_estado === 'PENDIENTE' ? 'bg-yellow-100 text-yellow-700'
                           : !t.asignacion_confirmada ? 'bg-gray-100 text-gray-500'
                           : 'bg-white border border-gray-200 text-gray-700'
                         }`}
                       >
-                        <span className="truncate">{!t.asignacion_confirmada ? '🕒 ' : '✓ '}{t.responsable_nombre?.split(' ')[0] || '—'}</span>
+                        {/* Nombre y apellido completos, sin recortar (se parte en
+                            líneas si no entra) - con dos personas de igual
+                            nombre, el apellido es lo que las distingue. */}
+                        <span className="break-words min-w-0 leading-tight">{!t.asignacion_confirmada ? '🕒 ' : '✓ '}{t.responsable_nombre || '—'}</span>
                         <button onClick={() => eliminarTurno(t.id)} className="text-gray-300 hover:text-fat-bordo-600 leading-none shrink-0">&times;</button>
                       </span>
                     ))}
@@ -590,6 +593,7 @@ export default function GestionarTurnos() {
               sucursalId={sucursalId} label="Colaborador" nombreValue={formAlta.responsable?.nombre}
               onChange={(id, u) => setFormAlta({ responsable: u, puesto: u?.puesto || '' })}
               advertenciaPorUsuario={advertenciasParaFecha(celdaAbierta.fecha)}
+              excluirIds={new Set((turnos || []).filter((t) => t.fecha_hora.slice(0, 10) === celdaAbierta.fecha && t.turno_tipo === celdaAbierta.turnoTipo).map((t) => t.responsable_user_id))}
             />
             <Select label="Puesto" value={formAlta.puesto} onChange={(e) => setFormAlta({ ...formAlta, puesto: e.target.value })}>
               <option value="">Elegí un puesto</option>

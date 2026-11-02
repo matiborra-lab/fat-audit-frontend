@@ -9,8 +9,9 @@ const ROL_LABEL = { ADMIN: 'Admin', AUDITOR: 'Auditor', GERENTE: 'Gerente', COLA
 // advertenciaPorUsuario: Map opcional usuario_id -> texto ("Con licencia
 // otorgada") - si está presente para un candidato, su nombre se muestra en
 // rojo con esa aclaración al lado (no lo bloquea, solo avisa - ver
-// Gestionar turnos).
-export default function BuscadorResponsable({ sucursalId, todasLasSucursales = false, value, nombreValue, onChange, label = 'Responsable', required = false, advertenciaPorUsuario }) {
+// Gestionar turnos). excluirIds: Set opcional de usuario_id que no se
+// ofrecen (ej. quienes ya están en ese turno).
+export default function BuscadorResponsable({ sucursalId, todasLasSucursales = false, value, nombreValue, onChange, label = 'Responsable', required = false, advertenciaPorUsuario, excluirIds }) {
   const [texto, setTexto] = useState(nombreValue || '');
   const [opciones, setOpciones] = useState([]);
   const [abierto, setAbierto] = useState(false);
@@ -59,7 +60,7 @@ export default function BuscadorResponsable({ sucursalId, todasLasSucursales = f
       />
       {abierto && opciones.length > 0 && (
         <div className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto">
-          {opciones.map((u) => {
+          {opciones.filter((u) => !excluirIds?.has(u.id)).map((u) => {
             const advertencia = advertenciaPorUsuario?.get(u.id);
             return (
               <button
